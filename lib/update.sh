@@ -344,6 +344,10 @@ run_update_mode() {
 		if declare -F _ispconfig_security_settings >/dev/null && [[ -f /usr/local/ispconfig/server/lib/config.inc.php ]]; then
 			_upd_run "ISPConfig: тайм-аут сессии, длина пароля, IDS для admin" _ispconfig_security_settings
 		fi
+		# 3.2.11e) Кнопки «Webmail» и «phpMyAdmin» в панели — на сайт по имени сервера
+		if declare -F _ispconfig_app_links >/dev/null && [[ -f /usr/local/ispconfig/server/lib/config.inc.php ]]; then
+			_upd_run "ISPConfig: кнопки Webmail и phpMyAdmin" _ispconfig_app_links
+		fi
 		# 3.2.11d) Бэкапы сайтов средствами ISPConfig (спрашивает)
 		if declare -F _ispconfig_site_backups >/dev/null && [[ -f /usr/local/ispconfig/server/lib/config.inc.php ]]; then
 			_upd_run "Бэкапы сайтов в ISPConfig" _ispconfig_site_backups

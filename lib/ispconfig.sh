@@ -814,8 +814,25 @@ _modernize_vhost_file() {
 	local addquic=0
 	[[ "$http3" == "y" && $have_quic -eq 0 ]] && addquic=1
 
-	awk -v bf="$bf" -v ciphers="$ciphers" -v addquic="$addquic" '
+	# Свежий шаблон панели сам ставит X-Content-Type-Options, X-Frame-Options и Referrer-Policy,
+	# а наш nginx.conf уже ставит их на уровне http (more_set_headers) — заголовки приходили дважды.
+	# Убираем дубли из vhost, только если глобальный заголовок с тем же именем включён. Referrer-Policy
+	# у панели строже (same-origin), поэтому не удаляем, а переводим в more_set_headers: он перекрывает
+	# глобальное значение для этого server.
+	local g_xct=0 g_xfo=0 g_ref=0 nc=/etc/nginx/nginx.conf
+	grep -qE "^[[:space:]]*more_set_headers[[:space:]]+'X-Content-Type-Options:" "$nc" 2>/dev/null && g_xct=1
+	grep -qE "^[[:space:]]*more_set_headers[[:space:]]+'X-Frame-Options:" "$nc" 2>/dev/null && g_xfo=1
+	grep -qE "^[[:space:]]*more_set_headers[[:space:]]+'Referrer-Policy:" "$nc" 2>/dev/null && g_ref=1
+
+	awk -v bf="$bf" -v ciphers="$ciphers" -v addquic="$addquic" -v g_xct="$g_xct" -v g_xfo="$g_xfo" -v g_ref="$g_ref" '
 		function emit(  l){ while((getline l < bf) > 0) print l; close(bf) }
+		g_xct=="1" && /^[[:space:]]*add_header[[:space:]]+X-Content-Type-Options[[:space:]]/ { next }
+		g_xfo=="1" && /^[[:space:]]*add_header[[:space:]]+X-Frame-Options[[:space:]]/ { next }
+		g_ref=="1" && /^[[:space:]]*add_header[[:space:]]+Referrer-Policy[[:space:]]/ {
+			match($0, /^[[:space:]]*/); ind=substr($0, 1, RLENGTH)
+			v=$3; gsub(/["'\''";]/, "", v)
+			print ind "more_set_headers '\''Referrer-Policy: " v "'\'' always;"; next
+		}
 		/^[[:space:]]*ssl_protocols[[:space:]]/ {
 			if ($0 !~ /TLSv1\.3/) sub(/;[[:space:]]*$/, " TLSv1.3;")
 			print; next
@@ -919,6 +936,30 @@ _ispconfig_modernize_masters() {
 		if _modernize_vhost_file "$ccdir/$m" "n"; then :; else rm -f "$ccdir/$m.luckystack.bak"; fi
 	done
 	ui_info "conf-custom: мастера панели/apps приведены к современному http2 + TLSv1.3 (переживут обновление ISPConfig)."
+}
+
+# Кнопки «Webmail» и «phpMyAdmin» в панели (список ящиков и баз). По умолчанию ISPConfig ведёт их
+# на https://[SERVERNAME]:8081/webmail и :8081/phpmyadmin: там SquirrelMail, которого нет, и порт,
+# который у нас другой, поэтому кнопки отдавали 404 или не открывались вовсе. Если есть сайт по
+# имени сервера с Roundcube и phpMyAdmin, ведём туда. Ссылки, заданные админом, не трогаем.
+_ispconfig_app_links() {
+	[[ -f /usr/local/ispconfig/server/lib/config.inc.php ]] || return 0
+	[[ "${DRY_RUN:-0}" == "1" ]] && return 0
+	[[ -f /etc/nginx/conf.d/10-host-fqdn.conf || -f /etc/apache2/sites-available/luckystack-host-fqdn.conf ]] || return 0
+	local cfg ap="${ISPCONFIG_APPS_PORT:-8081}" chg=()
+	cfg="$(_ispc_mysql -N -s -r -e "SELECT config FROM sys_ini WHERE sysini_id=1" 2>/dev/null | tr -d '\r')"
+	_app_default() { grep -qE "^${1}_url=https?://\[SERVERNAME\]:(8081|${ap})/${2}/?\$" <<<"$cfg"; }
+	if _app_default webmail webmail && [[ -f "${RC_NGINX_LOC:-/etc/nginx/snippets/default-locations/roundcube.conf}" || -e /var/www/html/roundcube ]]; then
+		_ispc_mysql -e "UPDATE sys_ini SET config=REGEXP_REPLACE(config, '(^|\\n)webmail_url=[^\\n]*', '\\\\1webmail_url=https://[SERVERNAME]/roundcube/') WHERE sysini_id=1" >>"$SETUP_LOG" 2>&1 \
+			&& chg+=("Webmail → https://<имя сервера>/roundcube/")
+	fi
+	if _app_default phpmyadmin phpmyadmin && [[ -e /var/www/html/phpmyadmin ]]; then
+		_ispc_mysql -e "UPDATE sys_ini SET config=REGEXP_REPLACE(config, '(^|\\n)phpmyadmin_url=[^\\n]*', '\\\\1phpmyadmin_url=https://[SERVERNAME]/phpmyadmin/') WHERE sysini_id=1" >>"$SETUP_LOG" 2>&1 \
+			&& chg+=("phpMyAdmin → https://<имя сервера>/phpmyadmin/")
+	fi
+	unset -f _app_default
+	((${#chg[@]})) && ui_success "Кнопки в панели ISPConfig ведут на сайт по имени сервера: $(IFS=';'; echo "${chg[*]}" | sed 's/;/, /g')."
+	return 0
 }
 
 # Настройки безопасности панели (вызывается в конце этапа и в --update). Свои значения админа

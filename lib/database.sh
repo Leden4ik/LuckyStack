@@ -184,11 +184,13 @@ sql_mode = "NO_ENGINE_SUBSTITUTION"
 innodb_strict_mode = 0
 CNF
 	[[ "${MARIADB_REMOTE:-n}" == "y" ]] && ui_info "MariaDB слушает 0.0.0.0 (удалённый доступ). Доступ к 3306 — только с разрешённых IP (firewall)."
-	sys_run "Перезапуск MariaDB" systemctl restart mariadb
 
 	# --- Maintenance-аккаунт (гайд правит /etc/mysql/debian.cnf) ---
 	# Не редактируем файл вслепую — проверяем доступ и чиним ТОЛЬКО при рассинхроне.
+	# До перезапуска: при старте MariaDB debian-start заходит по debian.cnf, и без пароля в нём
+	# в журнале оставалась строка «FATAL ERROR: Upgrade failed».
 	_mariadb_ensure_maint "$root_pw"
+	sys_run "Перезапуск MariaDB" systemctl restart mariadb
 
 	# --- Проверка ---
 	local ver

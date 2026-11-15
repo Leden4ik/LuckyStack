@@ -58,6 +58,9 @@ _webmail_nginx_deny() {
 		cat >"$tmp" <<NGX
 # luckystack: Roundcube с сайта разработчиков — веб-корень ${RC_DIR}/public_html
 location = /roundcube { return 301 /roundcube/; }
+# /webmail набирают по привычке, ведём туда же
+location = /webmail { return 301 /roundcube/; }
+location ^~ /webmail/ { return 301 /roundcube/; }
 location ^~ /roundcube/ {
     alias ${RC_DIR}/public_html/;
     index index.php;
@@ -90,6 +93,9 @@ location ~ ^/roundcube/(bin|SQL|config|temp|logs|installer|vendor)(/|$) { deny a
 location ~ ^/roundcube/program/(include|lib|localization|steps|actions)/ { deny all; }
 location ~ ^/roundcube/plugins/[^/]+/(config|SQL|bin)/ { deny all; }
 location ~ ^/roundcube/(README|INSTALL|LICENSE|CHANGELOG|UPGRADING|SECURITY|composer\.) { deny all; }
+# /webmail набирают по привычке, ведём на Roundcube
+location = /webmail { return 301 /roundcube/; }
+location ^~ /webmail/ { return 301 /roundcube/; }
 NGX
 	fi
 	local prev_want="" prev_drop=""

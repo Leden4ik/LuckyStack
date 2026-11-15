@@ -272,11 +272,21 @@ server {
     location ~ \\.php\$ { include snippets/php-default.conf; }
 }
 NGX
+	# ISPConfig держит свой :80 для того же имени (999-acme.vhost). Наш блок выше подключается раньше
+	# и сам отдаёт ACME-проверки ISPConfig, а его блок nginx игнорирует с предупреждением
+	# «conflicting server name» при каждой проверке. Отключаем ссылку, файл остаётся в sites-available.
+	local acme_en=/etc/nginx/sites-enabled/999-acme.vhost acme_off=0
+	if [[ -L "$acme_en" ]] && grep -qE "^[[:space:]]*server_name[[:space:]]+${fqdn//./\\.}[[:space:]]*;" "$acme_en"; then
+		rm -f "$acme_en" && acme_off=1
+	fi
 	if nginx -t >>"$SETUP_LOG" 2>&1; then
 		systemctl reload nginx >>"$SETUP_LOG" 2>&1 || true
 		rm -f "${conf}.bak"
+		((acme_off)) && log "hostcert: отключён 999-acme.vhost ISPConfig (тот же :80, ACME отдаёт наш сайт)"
 		ui_success "Сайт хоста по FQDN включён: ${UI_C}https://${fqdn}/roundcube${UI_NC} (валидный LE-серт)."
+		declare -F _ispconfig_app_links >/dev/null && _ispconfig_app_links
 	else
+		((acme_off)) && ln -sfn /etc/nginx/sites-available/acme.vhost "$acme_en"
 		# Откат: вернуть прежний конфиг из бэкапа; если бэкапа не было (файл создавался
 		# впервые) — убрать наш новый. ВАЖНО: if/then/else, а не '&& mv || rm', иначе
 		# сбой mv привёл бы к rm живого конфига.
@@ -331,6 +341,7 @@ APA
 	if web_configtest; then
 		web_reload; rm -f "${conf}.bak"
 		ui_success "Сайт хоста по FQDN включён: ${UI_C}https://${fqdn}/roundcube${UI_NC} (Apache, LE-серт)."
+		declare -F _ispconfig_app_links >/dev/null && _ispconfig_app_links
 	else
 		a2dissite luckystack-host-fqdn >>"$SETUP_LOG" 2>&1 || true
 		if [[ -f "${conf}.bak" ]]; then mv -f "${conf}.bak" "$conf"; a2ensite luckystack-host-fqdn >>"$SETUP_LOG" 2>&1 || true

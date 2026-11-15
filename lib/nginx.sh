@@ -813,7 +813,7 @@ _nginx_landing_page() {
 		cat >/var/www/html/index.html <<'HTML'
 <!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
 <title>nginx</title></head><body style="font-family:sans-serif;text-align:center;margin-top:6em">
-<h1>nginx работает</h1><p>Сервер установлен через server-installer.</p></body></html>
+<h1>nginx работает</h1><p>Сервер установлен через LuckyStack.</p></body></html>
 HTML
 		chown -R "$NGX_USER:$NGX_GROUP" /var/www/html
 	fi

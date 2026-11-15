@@ -453,7 +453,7 @@ run_mailport_check() {
 
 	# Шапка отчёта (англ. — чтобы годилось для любой поддержки)
 	{
-		echo "=== Outbound mail-port connectivity check (server-installer) ==="
+		echo "=== Outbound mail-port connectivity check (LuckyStack ${VERSION:-}) ==="
 		echo "Date:        ${ts}"
 		echo "Server FQDN: ${fqdn}"
 		echo "Public IPv4: ${pubip:-unknown}"

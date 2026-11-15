@@ -141,6 +141,9 @@ uninstall_hostcert() {
 		if [[ -f /etc/nginx/sites-available/ispconfig.vhost ]]; then
 			sed -i '/luckystack: panel-fqdn-only/{N;/return 444/d}' /etc/nginx/sites-available/ispconfig.vhost 2>/dev/null || true
 		fi
+		# наш :80 ушёл — вернуть ISPConfig его acme.vhost (hostcert отключал ссылку)
+		[[ -f /etc/nginx/sites-available/acme.vhost && ! -e /etc/nginx/sites-enabled/999-acme.vhost ]] \
+			&& ln -s /etc/nginx/sites-available/acme.vhost /etc/nginx/sites-enabled/999-acme.vhost 2>/dev/null
 		command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1 && systemctl reload nginx >>"$SETUP_LOG" 2>&1 || true
 		# apache: снять FQDN-сайт и блок panel-fqdn-only (маркер … </If>).
 		if command -v apache2ctl >/dev/null 2>&1; then
