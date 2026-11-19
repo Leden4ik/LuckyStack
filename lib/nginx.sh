@@ -14,8 +14,8 @@
 # в _nginx_autoset_versions. Значения ниже — ФОЛБЭК на случай отсутствия сети.
 # OpenSSL: ветка из OPENSSL_BRANCH, последний выпуск ветки и PCRE2 определяются автоматически
 # (OpenSSL и PCRE2 с GitHub), значения ниже и в _openssl_branch_ver — фолбэк. Проверено 2026-11-05.
-: "${NGINX_STABLE_VER:=1.30.6}"
-: "${NGINX_MAINLINE_VER:=1.31.8}"
+: "${NGINX_STABLE_VER:=1.30.7}"
+: "${NGINX_MAINLINE_VER:=1.31.9}"
 : "${OPENSSL_VER:=}"            # пин версии; пусто = последний выпуск ветки OPENSSL_BRANCH
 : "${PCRE2_VER:=10.49}"
 : "${ZLIBNG_VER:=2.3.3}"
