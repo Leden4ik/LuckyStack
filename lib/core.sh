@@ -581,11 +581,14 @@ run_step() {
 
 	# Исполняем функцию этапа; ошибки не должны ронять весь мастер
 	local rc=0
+	declare -F ch_begin >/dev/null && ch_begin "установка: ${STAGE_LABELS[$key]}"
 	if "$fn"; then
+		declare -F ch_end >/dev/null && ch_end
 		state_set "$key" "done"
 		ui_success "Этап завершён: ${STAGE_LABELS[$key]}"
 	else
 		rc=$?
+		declare -F ch_end >/dev/null && ch_end
 		state_set "$key" failed
 		ui_error "Этап завершился с ошибкой ($rc): ${STAGE_LABELS[$key]}"
 		log "ЭТАП $key завершился с ошибкой rc=$rc"

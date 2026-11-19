@@ -85,6 +85,7 @@ luckyctl status                # что стоит и каких версий
 luckyctl check                 # проверка здоровья сервера
 luckyctl cve                   # не вышли ли исправления безопасности для nginx и PHP
 luckyctl blacklist             # не попали ли IP и почтовые домены в чёрные списки
+luckyctl changes               # какие файлы менял установщик и когда
 luckyctl update                # обновить пакеты и заново наложить наши настройки
 luckyctl update nginx          # пересобрать nginx на свежую версию
 luckyctl rollback nginx        # вернуть прошлую сборку nginx

@@ -36,6 +36,7 @@ luckyctl $(version_of "$SS"), команда LuckyStack
   check                    проверка здоровья: службы, порты, сертификаты, бэкапы
   cve                      вышли ли исправления безопасности для nginx, OpenSSL и PHP
   blacklist                репутация почты: PTR, чёрные списки IP, домены в Spamhaus DBL
+  changes [N|ПУТЬ]          какие файлы менял каждый шаг установщика (последние N шагов или один файл)
   log [N]                  последние N строк журнала (по умолчанию 50)
   paths                    где лежат код, настройки, состояние и журнал
   diagnostics              архив для разбора проблемы, без паролей и токенов
@@ -113,6 +114,7 @@ case "$cmd" in
 	check)        run_ss --healthcheck "$@" ;;
 	cve)          run_ss --cve "$@" ;;
 	blacklist)    run_ss --blacklist "$@" ;;
+	changes)      need_root "$cmd"; run_ss --changes "$@" ;;
 	diagnostics)  need_root "$cmd"; run_ss --diagnostics "$@" ;;
 	restore)      need_root "$cmd"; run_ss --restore "$@" ;;
 	adopt)        need_root "$cmd"; run_ss --adopt "$@" ;;

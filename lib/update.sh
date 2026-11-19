@@ -166,10 +166,12 @@ run_update_mode() {
 
 	# 1) Системные пакеты
 	if [[ "$sel" == *" pkgs "* ]] && ui_confirm "Обновить системные пакеты (apt update && apt upgrade)?" y; then
+		declare -F ch_begin >/dev/null && ch_begin "обновление: системные пакеты (apt upgrade)"
 		apt_update
 		sys_run "apt upgrade" apt-get -y -o Dpkg::Options::=--force-confold upgrade || \
 			ui_warn "apt upgrade завершился с замечаниями — см. ${SETUP_LOG}."
 		sys_run "apt autoremove" apt-get -y autoremove || true
+		declare -F ch_end >/dev/null && ch_end
 	fi
 
 	# 1.5) ЯДРО — до наших патчей. Апдейтер ISPConfig перезаписывает меню (module.conf.php), формы,
@@ -184,7 +186,9 @@ run_update_mode() {
 	if [[ "$sel" == *" ispconfig "* ]] && [[ -f /usr/local/ispconfig/server/lib/config.inc.php ]]; then
 		# патчи накладываем и после неудачной попытки: апдейтер мог успеть их затереть
 		_ispc_updated=1
+		declare -F ch_begin >/dev/null && ch_begin "обновление: ядро ISPConfig"
 		( _update_ispconfig ) || UPD_FAILED+=("Обновление ISPConfig")
+		declare -F ch_end >/dev/null && ch_end
 		declare -F config_load >/dev/null && { config_load >/dev/null 2>&1 || true; }
 	fi
 	if [[ "$sel" == *" nginx "* ]] && declare -F stage_nginx >/dev/null && command -v nginx >/dev/null 2>&1; then
@@ -511,7 +515,9 @@ _upd_run() {
 	local label="$1" fn="$2" rc=0
 	echo ""
 	ui_step "Обновление: ${label}"
+	declare -F ch_begin >/dev/null && ch_begin "обновление: ${label}"
 	( "$fn" ) || rc=$?
+	declare -F ch_end >/dev/null && ch_end
 	if ((rc != 0)); then
 		ui_warn "${label}: завершилось с ошибкой (код ${rc}), остальные шаги продолжаются."
 		UPD_FAILED+=("$label")

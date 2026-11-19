@@ -72,6 +72,8 @@ DO_STATUS=0        # показать инвентаризацию (что ус�
 DO_HEALTHCHECK=0   # проверить здоровье сервера (сервисы/порты/TLS/панель) и выйти
 DO_SECREL=0        # вышли ли исправления безопасности (nginx, OpenSSL, PHP) и выйти
 SECREL_PLAIN=0     # --plain: строки «уровень|текст» для монитора
+DO_CHANGES=0       # журнал изменений файлов (и выйти)
+CHANGES_ARG=""     # для --changes: число шагов или путь к файлу
 DO_MAILREP=0       # репутация почты: PTR, чёрные списки, Spamhaus DBL (и выйти)
 DO_DIAGNOSTICS=0   # собрать обезличенный архив диагностики для поддержки и выйти
 DO_RESTORE=0       # восстановление из резервной копии (интерактивно) и выйти
@@ -116,6 +118,7 @@ Flags:
   --status         Show what is installed and which versions (and exit)
   --healthcheck    Check server health (services, ports, TLS, panel) and exit
   --cve           Check for security fixes (nginx, OpenSSL in nginx, PHP) and exit
+  --changes [N|PATH]  Show which files each installer step changed (last N steps or one file)
   --blacklist     Check mail reputation: PTR, IP blacklists, Spamhaus DBL, and exit
   --diagnostics    Collect an anonymized diagnostics bundle for support and exit
   --restore        Restore data from a backup (interactive)
@@ -161,6 +164,7 @@ LuckyStack v$VERSION, установщик сервера
   --status         Показать, что уже установлено и какие версии (и выйти)
   --healthcheck    Проверить здоровье сервера (сервисы, порты, TLS, панель) и выйти
   --cve           Проверить, вышли ли исправления безопасности (nginx, OpenSSL в nginx, PHP), и выйти
+  --changes [N|ПУТЬ]  Какие файлы менял каждый шаг установщика (последние N шагов или один файл)
   --blacklist     Проверить репутацию почты: PTR, чёрные списки IP, домены в Spamhaus DBL, и выйти
   --diagnostics    Собрать обезличенный архив диагностики для поддержки и выйти
   --restore        Восстановить данные из резервной копии (интерактивно)
@@ -201,6 +205,7 @@ while (($#)); do
 		--healthcheck) DO_HEALTHCHECK=1 ;;
 		--cve)         DO_SECREL=1 ;;
 		--blacklist)   DO_MAILREP=1 ;;
+		--changes)     DO_CHANGES=1; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then CHANGES_ARG="$2"; shift; fi ;;
 		--plain)       SECREL_PLAIN=1 ;;
 		--diagnostics) DO_DIAGNOSTICS=1 ;;
 		--restore)     DO_RESTORE=1 ;;
@@ -223,7 +228,7 @@ done
 # --- Валидация взаимоисключающих режимов/флагов ------------------------------
 # (до загрузки библиотек — поэтому обычный echo, а не ui_*)
 _modes=0
-for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
+for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_CHANGES" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
 	(( _m )) && (( _modes++ ))
 done
 if (( _modes > 1 )); then
@@ -266,7 +271,7 @@ type i18n_load >/dev/null 2>&1 && i18n_load "${UI_LANG:-ru}"
 # Этапы, реализованные в отдельных native-модулях. Подключаем те, что существуют;
 # для ещё не реализованных этапов остаются заглушки ниже.
 # nginx.sh/apache.sh подключаются до webserver.sh (он диспетчеризует к ним).
-for _stage_lib in preflight database nginx apache webserver php nodejs dbtools monit \
+for _stage_lib in changes preflight database nginx apache webserver php nodejs dbtools monit \
                    mail rspamd dns ftp ssl security webmail ispconfig \
                    hostcert rcplugins maildeliver mailsni tuning backup malware notify \
                    update secrel mailrep healthcheck uninstall; do
@@ -1635,6 +1640,13 @@ main() {
 		ui_error "lib/mailrep.sh не подключён."; exit 1
 	fi
 
+	# Журнал изменений файлов (нужен root: журнал закрыт для остальных)
+	if ((DO_CHANGES)); then
+		require_root
+		if declare -F run_changes >/dev/null; then run_changes ${CHANGES_ARG:+"$CHANGES_ARG"}; exit $?; fi
+		ui_error "lib/changes.sh не подключён."; exit 1
+	fi
+
 	# Diagnostics-bundle — обезличенный архив для поддержки (нужен root: журнал/конфиги)
 	if ((DO_DIAGNOSTICS)); then
 		require_root
@@ -1645,7 +1657,7 @@ main() {
 	# Восстановление из бэкапа — пишет в систему, нужен root
 	if ((DO_RESTORE)); then
 		require_root
-		if declare -F run_backup_restore >/dev/null; then run_backup_restore; exit $?; fi
+		if declare -F run_backup_restore >/dev/null; then ch_run "восстановление из снимка" run_backup_restore; exit $?; fi
 		ui_error "lib/backup.sh не подключён."; exit 1
 	fi
 
@@ -1657,7 +1669,7 @@ main() {
 
 	# Откат nginx или Roundcube на прошлую версию
 	if ((DO_ROLLBACK)); then
-		if declare -F run_rollback_mode >/dev/null; then run_rollback_mode; exit $?; fi
+		if declare -F run_rollback_mode >/dev/null; then ch_run "откат: ${ROLLBACK_TARGET:-выбор}" run_rollback_mode; exit $?; fi
 		ui_error "lib/update.sh не подключён."; exit 1
 	fi
 
@@ -1665,28 +1677,28 @@ main() {
 	if ((DO_PHP_ADD)); then
 		require_root
 		config_load || true
-		if declare -F run_php_add >/dev/null; then run_php_add; exit $?; fi
+		if declare -F run_php_add >/dev/null; then ch_run "add-php${PHP_ADD_ARG:+ $PHP_ADD_ARG}" run_php_add; exit $?; fi
 		ui_error "lib/php.sh не подключён."; exit 1
 	fi
 
 	# Удаление выбранных версий PHP (интерактивно, с защитой) — пишет в систему, нужен root
 	if ((DO_PHP_REMOVE)); then
 		require_root
-		if declare -F run_php_remove >/dev/null; then run_php_remove; exit $?; fi
+		if declare -F run_php_remove >/dev/null; then ch_run "remove-php" run_php_remove; exit $?; fi
 		ui_error "lib/php.sh не подключён."; exit 1
 	fi
 
 	# Смена часового пояса везде (система, PHP, MariaDB, cron) — пишет в систему, нужен root
 	if ((DO_TIMEZONE)); then
 		config_load || true
-		if declare -F run_timezone_mode >/dev/null; then run_timezone_mode; exit $?; fi
+		if declare -F run_timezone_mode >/dev/null; then ch_run "часовой пояс${TZ_ARG:+ $TZ_ARG}" run_timezone_mode; exit $?; fi
 		ui_error "lib/preflight.sh не подключён."; exit 1
 	fi
 
 	# Adopt-режим — аддоны на уже установленный (ручной) сервер: бэкап + подтверждение,
 	# только server-agnostic, ядро/шаблоны ISPConfig не трогаются
 	if ((DO_ADOPT)); then
-		if declare -F run_adopt_mode >/dev/null; then run_adopt_mode; exit $?; fi
+		if declare -F run_adopt_mode >/dev/null; then ch_run "adopt" run_adopt_mode; exit $?; fi
 		ui_error "lib/update.sh не подключён."; exit 1
 	fi
 
