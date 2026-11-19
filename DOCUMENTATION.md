@@ -101,7 +101,8 @@ sudo bash server-setup.sh
 | `install [--resume\|--only Э\|--from Э\|--unattended\|--reconfigure\|--force\|--dry-run]` | без ключа |
 | `status`, `check`, `diagnostics`, `restore`, `adopt`, `uninstall`, `remove-php`, `self-update` | `--status`, `--healthcheck`, `--diagnostics`, … |
 | `update [пункты] [--dry-run]` | `--update`, пункты уходят в `UPDATE_ITEMS` (без вопросов) |
-| `rollback nginx\|roundcube\|luckystack` | `--rollback X` |
+| `rollback nginx\| `cve [--plain]` | `--cve`: вышли ли исправления безопасности для nginx (по списку nginx.org), OpenSSL в сборке nginx и PHP (репозиторий пакетов, php.net, конец поддержки ветки). `--plain` печатает строки `уровень|текст` для монитора. Сеть спрашивается раз в сутки, кэш в `/var/lib/luckystack/secrel` |
+|roundcube\|luckystack` | `--rollback X` |
 | `add-php [X.Y]`, `timezone [пояс]` | `--add-php`, `--timezone` |
 | `backup`, `backup list` | `/usr/local/sbin/server-backup.sh [--list]` |
 | `log [N]`, `paths`, `version` | хвост журнала, где что лежит, версия и `--check-update` |
@@ -887,7 +888,8 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
   таймер, службу входов и бота ВСЕГДА, а конфиг дописывает: что настроено в панели, не затирается. Токен без chat
   id даёт предупреждение. `server-notify.sh [-e событие] [-l info|warn|crit] тема тело`: выключенное событие не
   шлётся. `server-monitor.sh` (08:00): диск, сертификат хоста, все включённые службы (включая все PHP-FPM, CrowdSec,
-  fail2ban, ClamAV), свежесть бэкапа по каталогам снимков, нужна ли перезагрузка; при `digest` — ежедневная сводка.
+  fail2ban, ClamAV), свежесть бэкапа по каталогам снимков, нужна ли перезагрузка; исправления безопасности nginx, OpenSSL и PHP
+  (`luckyctl cve`, об одном наборе находок сообщает один раз); при `digest` — ежедневная сводка.
   Панель System → Дополнения → Notifications: всё это плюс кнопка «Найти chat id» (getUpdates без подтверждения, а при
   работающем боте — его список `/var/lib/server-notify/chats.json`). Тест на тестовом сервере 23/23 (Telegram —
   заглушка `tg-mock.php`).

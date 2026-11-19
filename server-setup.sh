@@ -70,6 +70,8 @@ DO_UNINSTALL=0     # режим удаления компонентов
 CLEAN_BUILD=0      # очистить кеш сборки (исходники прошлых попыток) перед стартом
 DO_STATUS=0        # показать инвентаризацию (что установлено + версии) и выйти
 DO_HEALTHCHECK=0   # проверить здоровье сервера (сервисы/порты/TLS/панель) и выйти
+DO_SECREL=0        # вышли ли исправления безопасности (nginx, OpenSSL, PHP) и выйти
+SECREL_PLAIN=0     # --plain: строки «уровень|текст» для монитора
 DO_DIAGNOSTICS=0   # собрать обезличенный архив диагностики для поддержки и выйти
 DO_RESTORE=0       # восстановление из резервной копии (интерактивно) и выйти
 DO_UPDATE=0        # режим обновления/патчей (безопасно, без ядра) и выйти
@@ -112,6 +114,7 @@ Flags:
   --clean-build    Clear the build cache (nginx/ISPConfig sources of past attempts)
   --status         Show what is installed and which versions (and exit)
   --healthcheck    Check server health (services, ports, TLS, panel) and exit
+  --cve           Check for security fixes (nginx, OpenSSL in nginx, PHP) and exit
   --diagnostics    Collect an anonymized diagnostics bundle for support and exit
   --restore        Restore data from a backup (interactive)
   --update         Update/patch mode: update packages + re-apply additive
@@ -155,6 +158,7 @@ LuckyStack v$VERSION, установщик сервера
   --clean-build    Очистить кеш сборки (исходники nginx/ISPConfig прошлых попыток)
   --status         Показать, что уже установлено и какие версии (и выйти)
   --healthcheck    Проверить здоровье сервера (сервисы, порты, TLS, панель) и выйти
+  --cve           Проверить, вышли ли исправления безопасности (nginx, OpenSSL в nginx, PHP), и выйти
   --diagnostics    Собрать обезличенный архив диагностики для поддержки и выйти
   --restore        Восстановить данные из резервной копии (интерактивно)
   --update         Режим обновления/патчей: обновить пакеты + переприменить
@@ -192,6 +196,8 @@ while (($#)); do
 		--clean-build) CLEAN_BUILD=1 ;;
 		--status)      DO_STATUS=1 ;;
 		--healthcheck) DO_HEALTHCHECK=1 ;;
+		--cve)         DO_SECREL=1 ;;
+		--plain)       SECREL_PLAIN=1 ;;
 		--diagnostics) DO_DIAGNOSTICS=1 ;;
 		--restore)     DO_RESTORE=1 ;;
 		--update)      DO_UPDATE=1 ;;
@@ -213,7 +219,7 @@ done
 # --- Валидация взаимоисключающих режимов/флагов ------------------------------
 # (до загрузки библиотек — поэтому обычный echo, а не ui_*)
 _modes=0
-for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
+for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
 	(( _m )) && (( _modes++ ))
 done
 if (( _modes > 1 )); then
@@ -259,7 +265,7 @@ type i18n_load >/dev/null 2>&1 && i18n_load "${UI_LANG:-ru}"
 for _stage_lib in preflight database nginx apache webserver php nodejs dbtools monit \
                    mail rspamd dns ftp ssl security webmail ispconfig \
                    hostcert rcplugins maildeliver mailsni tuning backup malware notify \
-                   update healthcheck uninstall; do
+                   update secrel healthcheck uninstall; do
 	[[ -f "$LIB_DIR/${_stage_lib}.sh" ]] && . "$LIB_DIR/${_stage_lib}.sh"
 done
 
@@ -1605,6 +1611,15 @@ main() {
 	if ((DO_HEALTHCHECK)); then
 		if declare -F run_healthcheck >/dev/null; then run_healthcheck; exit $?; fi
 		ui_error "lib/healthcheck.sh не подключён."; exit 1
+	fi
+
+	# Исправления безопасности: nginx по nginx.org, OpenSSL в сборке nginx, PHP (root не нужен)
+	if ((DO_SECREL)); then
+		if declare -F run_security_releases >/dev/null; then
+			if ((SECREL_PLAIN)); then run_security_releases --plain; else run_security_releases; fi
+			exit $?
+		fi
+		ui_error "lib/secrel.sh не подключён."; exit 1
 	fi
 
 	# Diagnostics-bundle — обезличенный архив для поддержки (нужен root: журнал/конфиги)

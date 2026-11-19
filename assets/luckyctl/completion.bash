@@ -3,7 +3,7 @@ _luckyctl() {
 	local cur prev cmds
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
-	cmds="install adopt uninstall status check log paths diagnostics update rollback add-php remove-php timezone backup restore self-update version help"
+	cmds="install adopt uninstall status check cve log paths diagnostics update rollback add-php remove-php timezone backup restore self-update version help"
 	if ((COMP_CWORD == 1)); then
 		COMPREPLY=($(compgen -W "$cmds" -- "$cur")); return
 	fi

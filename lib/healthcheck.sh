@@ -392,6 +392,20 @@ run_healthcheck() {
 	fi
 	ui_box_bottom
 
+	# --- Исправления безопасности: nginx по nginx.org, OpenSSL в nginx, PHP ---
+	if declare -F secrel_scan >/dev/null; then
+		ui_box_top "Исправления безопасности"
+		local _lvl _txt
+		while IFS='|' read -r _lvl _txt; do
+			case "$_lvl" in
+				ok)   _hc_ok "$_txt" ;;
+				warn) _hc_warn "$_txt" ;;
+				*)    ui_box_line "    ${UI_D}${_txt}${UI_NC}" ;;
+			esac
+		done < <(secrel_scan)
+		ui_box_bottom
+	fi
+
 	_hc_security_backups "$have_mail" "$have_panel"
 
 	# --- Сводка ---

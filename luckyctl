@@ -34,6 +34,7 @@ luckyctl $(version_of "$SS"), команда LuckyStack
 Состояние
   status                   что установлено и каких версий
   check                    проверка здоровья: службы, порты, сертификаты, бэкапы
+  cve                      вышли ли исправления безопасности для nginx, OpenSSL и PHP
   log [N]                  последние N строк журнала (по умолчанию 50)
   paths                    где лежат код, настройки, состояние и журнал
   diagnostics              архив для разбора проблемы, без паролей и токенов
@@ -109,6 +110,7 @@ case "$cmd" in
 	install)      need_root "$cmd"; run_ss "$@" ;;
 	status)       run_ss --status "$@" ;;
 	check)        run_ss --healthcheck "$@" ;;
+	cve)          run_ss --cve "$@" ;;
 	diagnostics)  need_root "$cmd"; run_ss --diagnostics "$@" ;;
 	restore)      need_root "$cmd"; run_ss --restore "$@" ;;
 	adopt)        need_root "$cmd"; run_ss --adopt "$@" ;;

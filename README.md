@@ -83,6 +83,7 @@ sudo bash server-setup.sh --dry-run
 ```bash
 luckyctl status                # что стоит и каких версий
 luckyctl check                 # проверка здоровья сервера
+luckyctl cve                   # не вышли ли исправления безопасности для nginx и PHP
 luckyctl update                # обновить пакеты и заново наложить наши настройки
 luckyctl update nginx          # пересобрать nginx на свежую версию
 luckyctl rollback nginx        # вернуть прошлую сборку nginx

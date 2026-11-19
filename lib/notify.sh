@@ -301,6 +301,22 @@ if [[ -f "$rc_ini" ]] && command -v php >/dev/null 2>&1; then
 	fi
 fi
 
+# Вышли исправления безопасности для nginx (по nginx.org), OpenSSL в сборке nginx или PHP
+# (luckyctl cve). Об одном и том же наборе сообщаем один раз, новый набор — снова.
+fixes=""
+if [[ -x /usr/local/sbin/luckyctl ]]; then
+	st=/var/lib/server-monitor; mkdir -p "$st"
+	fixes="$(/usr/local/sbin/luckyctl cve --plain 2>/dev/null | grep '^warn|' | cut -d'|' -f2-)"
+	if [[ -n "$fixes" ]]; then
+		key="$(printf '%s' "$fixes" | md5sum | cut -c1-32)"
+		if [[ "$(cat "$st/cve-notified" 2>/dev/null)" != "$key" ]]; then
+			"$NOTIFY" -e monitor -l warn "Вышли исправления безопасности" \
+				"$(printf '• %s\n' "${fixes//$'\n'/$'\n• '}")"$'\n\n'"Подробнее: luckyctl cve" \
+				&& echo "$key" >"$st/cve-notified"
+		fi
+	fi
+fi
+
 # Ежедневная сводка (событие digest)
 case " ${NOTIFY_EVENTS:-} " in *" digest "*)
 	upd="$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst')"
@@ -319,6 +335,7 @@ case " ${NOTIFY_EVENTS:-} " in *" digest "*)
 		"Бэкап: ${bk_txt}" \
 		"Сертификат хоста: ${cert_txt}" \
 		"Обновления: ${upd} (безопасности: ${sec}), перезагрузка: ${reboot_need:-не нужна}" \
+		"Исправления nginx, OpenSSL, PHP: $([[ -n "$fixes" ]] && echo "требуют внимания ($(grep -c . <<<"$fixes")), luckyctl cve" || echo "всё актуально")" \
 		"CrowdSec: активных банов ${bans_cs}, срабатываний за сутки ${alerts_cs}; fail2ban: банов ${bans_f2b}" \
 		"Входов в панель и по SSH за сутки: ${logins}")"
 	(( ${#problems[@]} )) && body+=$'\n\n'"Проблемы:"$'\n'"$(printf '• %s\n' "${problems[@]}")"
