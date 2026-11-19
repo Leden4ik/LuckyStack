@@ -317,6 +317,22 @@ if [[ -x /usr/local/sbin/luckyctl ]]; then
 	fi
 fi
 
+# Репутация почты (luckyctl blacklist): IP в чёрных списках, домены в Spamhaus DBL, PTR.
+# Как и выше, о том же наборе находок сообщаем один раз.
+rep=""
+if [[ -x /usr/local/sbin/luckyctl ]] && command -v postfix >/dev/null 2>&1; then
+	st=/var/lib/server-monitor; mkdir -p "$st"
+	rep="$(/usr/local/sbin/luckyctl blacklist --plain 2>/dev/null | grep '^warn|' | cut -d'|' -f2-)"
+	key="$(printf '%s' "$rep" | md5sum | cut -c1-32)"
+	if [[ -n "$rep" ]] && [[ "$(cat "$st/rep-notified" 2>/dev/null)" != "$key" ]]; then
+		"$NOTIFY" -e monitor -l warn "Репутация почты" \
+			"$(printf '• %s\n' "${rep//$'\n'/$'\n• '}")"$'\n\n'"Подробнее: luckyctl blacklist" \
+			&& echo "$key" >"$st/rep-notified"
+	elif [[ -z "$rep" ]]; then
+		rm -f "$st/rep-notified"
+	fi
+fi
+
 # Ежедневная сводка (событие digest)
 case " ${NOTIFY_EVENTS:-} " in *" digest "*)
 	upd="$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst')"
@@ -336,6 +352,7 @@ case " ${NOTIFY_EVENTS:-} " in *" digest "*)
 		"Сертификат хоста: ${cert_txt}" \
 		"Обновления: ${upd} (безопасности: ${sec}), перезагрузка: ${reboot_need:-не нужна}" \
 		"Исправления nginx, OpenSSL, PHP: $([[ -n "$fixes" ]] && echo "требуют внимания ($(grep -c . <<<"$fixes")), luckyctl cve" || echo "всё актуально")" \
+		"Репутация почты: $(if ! command -v postfix >/dev/null 2>&1; then echo "почты нет"; elif [[ -n "$rep" ]]; then echo "есть проблемы ($(grep -c . <<<"$rep")), luckyctl blacklist"; else echo "в порядке"; fi)" \
 		"CrowdSec: активных банов ${bans_cs}, срабатываний за сутки ${alerts_cs}; fail2ban: банов ${bans_f2b}" \
 		"Входов в панель и по SSH за сутки: ${logins}")"
 	(( ${#problems[@]} )) && body+=$'\n\n'"Проблемы:"$'\n'"$(printf '• %s\n' "${problems[@]}")"

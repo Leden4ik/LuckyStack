@@ -31,6 +31,7 @@ ls_hint() {
 		--only|--from|--resume|--reconfigure|--unattended) echo "luckyctl install $f${*:+ $*}" ;;
 		--healthcheck)  echo "luckyctl check" ;;
 		--cve)          echo "luckyctl cve" ;;
+		--blacklist)    echo "luckyctl blacklist" ;;
 		--status)       echo "luckyctl status" ;;
 		--diagnostics)  echo "luckyctl diagnostics" ;;
 		--update)       echo "luckyctl update${*:+ $*}" ;;

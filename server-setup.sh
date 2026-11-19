@@ -72,6 +72,7 @@ DO_STATUS=0        # показать инвентаризацию (что ус�
 DO_HEALTHCHECK=0   # проверить здоровье сервера (сервисы/порты/TLS/панель) и выйти
 DO_SECREL=0        # вышли ли исправления безопасности (nginx, OpenSSL, PHP) и выйти
 SECREL_PLAIN=0     # --plain: строки «уровень|текст» для монитора
+DO_MAILREP=0       # репутация почты: PTR, чёрные списки, Spamhaus DBL (и выйти)
 DO_DIAGNOSTICS=0   # собрать обезличенный архив диагностики для поддержки и выйти
 DO_RESTORE=0       # восстановление из резервной копии (интерактивно) и выйти
 DO_UPDATE=0        # режим обновления/патчей (безопасно, без ядра) и выйти
@@ -115,6 +116,7 @@ Flags:
   --status         Show what is installed and which versions (and exit)
   --healthcheck    Check server health (services, ports, TLS, panel) and exit
   --cve           Check for security fixes (nginx, OpenSSL in nginx, PHP) and exit
+  --blacklist     Check mail reputation: PTR, IP blacklists, Spamhaus DBL, and exit
   --diagnostics    Collect an anonymized diagnostics bundle for support and exit
   --restore        Restore data from a backup (interactive)
   --update         Update/patch mode: update packages + re-apply additive
@@ -159,6 +161,7 @@ LuckyStack v$VERSION, установщик сервера
   --status         Показать, что уже установлено и какие версии (и выйти)
   --healthcheck    Проверить здоровье сервера (сервисы, порты, TLS, панель) и выйти
   --cve           Проверить, вышли ли исправления безопасности (nginx, OpenSSL в nginx, PHP), и выйти
+  --blacklist     Проверить репутацию почты: PTR, чёрные списки IP, домены в Spamhaus DBL, и выйти
   --diagnostics    Собрать обезличенный архив диагностики для поддержки и выйти
   --restore        Восстановить данные из резервной копии (интерактивно)
   --update         Режим обновления/патчей: обновить пакеты + переприменить
@@ -197,6 +200,7 @@ while (($#)); do
 		--status)      DO_STATUS=1 ;;
 		--healthcheck) DO_HEALTHCHECK=1 ;;
 		--cve)         DO_SECREL=1 ;;
+		--blacklist)   DO_MAILREP=1 ;;
 		--plain)       SECREL_PLAIN=1 ;;
 		--diagnostics) DO_DIAGNOSTICS=1 ;;
 		--restore)     DO_RESTORE=1 ;;
@@ -219,7 +223,7 @@ done
 # --- Валидация взаимоисключающих режимов/флагов ------------------------------
 # (до загрузки библиотек — поэтому обычный echo, а не ui_*)
 _modes=0
-for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
+for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
 	(( _m )) && (( _modes++ ))
 done
 if (( _modes > 1 )); then
@@ -265,7 +269,7 @@ type i18n_load >/dev/null 2>&1 && i18n_load "${UI_LANG:-ru}"
 for _stage_lib in preflight database nginx apache webserver php nodejs dbtools monit \
                    mail rspamd dns ftp ssl security webmail ispconfig \
                    hostcert rcplugins maildeliver mailsni tuning backup malware notify \
-                   update secrel healthcheck uninstall; do
+                   update secrel mailrep healthcheck uninstall; do
 	[[ -f "$LIB_DIR/${_stage_lib}.sh" ]] && . "$LIB_DIR/${_stage_lib}.sh"
 done
 
@@ -1620,6 +1624,15 @@ main() {
 			exit $?
 		fi
 		ui_error "lib/secrel.sh не подключён."; exit 1
+	fi
+
+	# Репутация почты: PTR, чёрные списки IP, домены в Spamhaus DBL (root нужен только для списка доменов)
+	if ((DO_MAILREP)); then
+		if declare -F run_mail_reputation >/dev/null; then
+			if ((SECREL_PLAIN)); then run_mail_reputation --plain; else run_mail_reputation; fi
+			exit $?
+		fi
+		ui_error "lib/mailrep.sh не подключён."; exit 1
 	fi
 
 	# Diagnostics-bundle — обезличенный архив для поддержки (нужен root: журнал/конфиги)

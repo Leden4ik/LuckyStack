@@ -102,6 +102,7 @@ sudo bash server-setup.sh
 | `status`, `check`, `diagnostics`, `restore`, `adopt`, `uninstall`, `remove-php`, `self-update` | `--status`, `--healthcheck`, `--diagnostics`, … |
 | `update [пункты] [--dry-run]` | `--update`, пункты уходят в `UPDATE_ITEMS` (без вопросов) |
 | `rollback nginx\| `cve [--plain]` | `--cve`: вышли ли исправления безопасности для nginx (по списку nginx.org), OpenSSL в сборке nginx и PHP (репозиторий пакетов, php.net, конец поддержки ветки). `--plain` печатает строки `уровень|текст` для монитора. Сеть спрашивается раз в сутки, кэш в `/var/lib/luckystack/secrel` |
+| `blacklist [--plain]` | `--blacklist`: репутация почты. PTR внешнего IP (и что имя указывает обратно на этот IP), IP в списках Spamhaus ZEN, SpamCop, PSBL, Mailspike, активные почтовые домены ISPConfig в Spamhaus DBL. Spamhaus не отвечает через публичные DNS (1.1.1.1, 8.8.8.8), поэтому списки спрашиваются через локальный BIND; без него проверка честно пропускается. Раздел «Репутация почты» есть и в `luckyctl check` (если стоит почта) |
 |roundcube\|luckystack` | `--rollback X` |
 | `add-php [X.Y]`, `timezone [пояс]` | `--add-php`, `--timezone` |
 | `backup`, `backup list` | `/usr/local/sbin/server-backup.sh [--list]` |
@@ -889,7 +890,8 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
   id даёт предупреждение. `server-notify.sh [-e событие] [-l info|warn|crit] тема тело`: выключенное событие не
   шлётся. `server-monitor.sh` (08:00): диск, сертификат хоста, все включённые службы (включая все PHP-FPM, CrowdSec,
   fail2ban, ClamAV), свежесть бэкапа по каталогам снимков, нужна ли перезагрузка; исправления безопасности nginx, OpenSSL и PHP
-  (`luckyctl cve`, об одном наборе находок сообщает один раз); при `digest` — ежедневная сводка.
+  (`luckyctl cve`, об одном наборе находок сообщает один раз); репутация почты (`luckyctl blacklist`, так же один раз
+  на набор находок); при `digest` — ежедневная сводка.
   Панель System → Дополнения → Notifications: всё это плюс кнопка «Найти chat id» (getUpdates без подтверждения, а при
   работающем боте — его список `/var/lib/server-notify/chats.json`). Тест на тестовом сервере 23/23 (Telegram —
   заглушка `tg-mock.php`).

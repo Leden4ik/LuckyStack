@@ -406,6 +406,19 @@ run_healthcheck() {
 		ui_box_bottom
 	fi
 
+	# --- Репутация почты: PTR, чёрные списки IP, Spamhaus DBL ---
+	if ((have_mail)) && declare -F mailrep_scan >/dev/null; then
+		ui_box_top "Репутация почты"
+		while IFS='|' read -r _lvl _txt; do
+			case "$_lvl" in
+				ok)   _hc_ok "$_txt" ;;
+				warn) _hc_warn "$_txt" ;;
+				*)    ui_box_line "    ${UI_D}${_txt}${UI_NC}" ;;
+			esac
+		done < <(mailrep_scan)
+		ui_box_bottom
+	fi
+
 	_hc_security_backups "$have_mail" "$have_panel"
 
 	# --- Сводка ---
