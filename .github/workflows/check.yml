@@ -16,14 +16,14 @@ jobs:
 
       - name: Синтаксис bash
         run: |
-          for f in server-setup.sh luckyctl lib/*.sh tests/repo-checks.sh $(find assets tools tests/e2e -name '*.sh' 2>/dev/null); do
+          for f in server-setup.sh luckyctl get.sh lib/*.sh tests/repo-checks.sh $(find assets tools tests/e2e -name '*.sh' 2>/dev/null); do
             bash -n "$f" || exit 1
           done
 
       - name: ShellCheck
         run: |
           shellcheck --version | head -2
-          shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh tests/repo-checks.sh tests/e2e/*.sh tools/*.sh $(find assets -name '*.sh')
+          shellcheck -x -S warning server-setup.sh luckyctl get.sh lib/*.sh tests/repo-checks.sh tests/e2e/*.sh tools/*.sh $(find assets -name '*.sh')
 
       - name: Модульные тесты (bats)
         run: |

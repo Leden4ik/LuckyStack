@@ -8,7 +8,7 @@ bad() { echo "ОШИБКА: $*"; fail=1; }
 ok()  { echo "ок: $*"; }
 
 # 1. Права на запуск хранятся в Git (на Windows их легко потерять, так вышел битый 0.1.0)
-for f in server-setup.sh luckyctl; do
+for f in server-setup.sh luckyctl get.sh; do
 	mode="$(git ls-files -s -- "$f" | awk '{print $1}')"
 	[[ "$mode" == "100755" ]] && ok "$f исполняемый" || bad "$f без права на запуск (режим ${mode:-нет в Git}): git update-index --chmod=+x $f"
 done
@@ -28,7 +28,12 @@ fi
 crlf="$(git ls-files -z | perl -0 -ne 'chomp; next unless -f $_ && -T $_; open my $h, "<:raw", $_ or next; local $/; my $c = <$h>; print "$_\n" if $c =~ /\r/' | head -5)"
 [[ -z "$crlf" ]] && ok "переводы строк LF" || bad "файлы с CRLF: ${crlf//$'\n'/ }"
 
-# 5. Лицензия на месте
+# 5. Ключ в get.sh тот же, что в assets/release-signers: им сервер проверяет выпуски
+k_repo="$(cat assets/release-signers 2>/dev/null)"
+k_get="$(grep -m1 -oP "^SIGNERS='\K[^']+" get.sh 2>/dev/null)"
+[[ -n "$k_repo" && "$k_repo" == "$k_get" ]] && ok "ключ выпусков в get.sh совпадает с assets/release-signers" 	|| bad "ключ выпусков в get.sh и assets/release-signers разный"
+
+# 6. Лицензия на месте
 [[ -s LICENSE ]] && grep -q 'MIT License' LICENSE && ok "LICENSE (MIT)" || bad "нет LICENSE или это не MIT"
 
 exit "$fail"

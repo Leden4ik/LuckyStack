@@ -10,11 +10,19 @@
 #   SELF_UPDATE_REF   поставить конкретный тег или ветку (v0.1.1, main) вместо последнего релиза
 #   SELF_UPDATE_API   адрес API (по умолчанию https://api.github.com), нужен для проверок
 #   GITHUB_TOKEN      токен, если репозиторий приватный (свой форк)
+#   SELF_UPDATE_DL    откуда качать файлы выпуска (по умолчанию https://github.com), нужен для проверок
+#   SELF_UPDATE_ALLOW_UNSIGNED=y  поставить выпуск без подписанного архива (старые выпуски до 0.1.6)
+#
+# Подпись: к выпуску приложены luckystack-X.Y.Z.tar.gz, SHA256SUMS и SHA256SUMS.sig (ssh-keygen -Y
+# sign ключом luckystack-release). Открытый ключ берётся из уже установленной версии
+# (assets/release-signers), поэтому подменить его вместе с архивом нельзя.
 # Настройки, состояние и журнал лежат в /etc и /var и обновлением не трогаются.
 # =============================================================================
 
 : "${SELF_UPDATE_REPO:=Leden4ik/luckystack}"
 : "${SELF_UPDATE_API:=https://api.github.com}"
+: "${SELF_UPDATE_DL:=https://github.com}"
+SU_SIGN_ID="luckystack-release"
 
 # версия из произвольного server-setup.sh (VERSION="...")
 _su_version_of() { grep -m1 -oE 'VERSION="[^"]+"' "$1" 2>/dev/null | cut -d'"' -f2; }
@@ -39,6 +47,20 @@ _su_latest() {
 	_SU_NOTES="$(grep -m1 -oE '"body"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' <<<"$json" \
 		| sed -E 's/^"body"[[:space:]]*:[[:space:]]*"//; s/"$//' | sed -e 's/\\r//g' -e 's/\\n/\n/g' -e 's/\\"/"/g')"
 	[[ -n "$_SU_TAG" ]]
+}
+
+# _su_verify каталог файл_ключей архив — подпись SHA256SUMS и сумма архива; причина отказа в _SU_ERR
+_su_verify() {
+	local d="$1" signers="$2" name="$3" want got
+	_SU_ERR=""
+	[[ -s "$signers" ]] || { _SU_ERR="нет открытого ключа выпусков (${signers})"; return 1; }
+	command -v ssh-keygen >/dev/null 2>&1 || { _SU_ERR="нет ssh-keygen (пакет openssh-client)"; return 1; }
+	ssh-keygen -Y verify -f "$signers" -I "$SU_SIGN_ID" -n "$SU_SIGN_ID" -s "$d/SHA256SUMS.sig" <"$d/SHA256SUMS" >/dev/null 2>&1 \
+		|| { _SU_ERR="подпись SHA256SUMS не сходится"; return 1; }
+	want="$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1; exit }' "$d/SHA256SUMS")"
+	got="$(sha256sum "$d/$name" 2>/dev/null | awk '{print $1}')"
+	[[ -n "$want" && "$want" == "$got" ]] || { _SU_ERR="контрольная сумма ${name} не совпадает"; return 1; }
+	return 0
 }
 
 # 0, если версия $2 новее $1 (0.1.10 > 0.1.9)
@@ -102,9 +124,32 @@ run_self_update() {
 	[[ -n "${_SU_NOTES:-}" ]] && { ui_info "Что нового:"; sed 's/^/    /' <<<"$_SU_NOTES" | head -30; }
 
 	local tmp; tmp="$(mktemp -d)"
-	ui_step "Загрузка ${SELF_UPDATE_REPO}@${ref}"
-	if ! _su_api "tarball/${ref}" --max-time 180 -o "$tmp/src.tgz"; then
-		ui_error "Не удалось скачать ${ref} (сеть, неверный тег или нет доступа к репозиторию)."; rm -rf "$tmp"; return 1
+	local signed=0 name="luckystack-${rv}.tar.gz" f got_all=1
+	if [[ -n "$rv" ]]; then
+		ui_step "Загрузка выпуска ${ref} с подписью"
+		for f in "$name" SHA256SUMS SHA256SUMS.sig; do
+			curl -fsSL --max-time 180 -o "$tmp/$f" "${SELF_UPDATE_DL%/}/${SELF_UPDATE_REPO}/releases/download/${ref}/${f}" 2>/dev/null || { got_all=0; break; }
+		done
+		if ((got_all)); then
+			# скачанное обязано пройти проверку: другого пути для подписанного выпуска нет
+			if ! _su_verify "$tmp" "${SCRIPT_DIR}/assets/release-signers" "$name"; then
+				ui_error "Выпуск ${ref} не прошёл проверку: ${_SU_ERR}. Обновление остановлено, ничего не изменено."
+				rm -rf "$tmp"; return 1
+			fi
+			mv -f "$tmp/$name" "$tmp/src.tgz"; signed=1
+			ui_success "Подпись выпуска и контрольная сумма архива проверены."
+		elif [[ "${SELF_UPDATE_ALLOW_UNSIGNED:-n}" != "y" ]]; then
+			ui_error "У выпуска ${ref} нет подписанного архива. Поставить без проверки: SELF_UPDATE_ALLOW_UNSIGNED=y luckyctl self-update"
+			rm -rf "$tmp"; return 1
+		fi
+	fi
+	if ((!signed)); then
+		if [[ -n "$rv" ]]; then ui_warn "Ставлю ${ref} без проверки подписи (SELF_UPDATE_ALLOW_UNSIGNED=y)."
+		else ui_warn "${ref} не выпуск, а ветка или коммит: подписи у него нет, ставлю без проверки."; fi
+		ui_step "Загрузка ${SELF_UPDATE_REPO}@${ref}"
+		if ! _su_api "tarball/${ref}" --max-time 180 -o "$tmp/src.tgz"; then
+			ui_error "Не удалось скачать ${ref} (сеть, неверный тег или нет доступа к репозиторию)."; rm -rf "$tmp"; return 1
+		fi
 	fi
 	mkdir "$tmp/x"
 	if ! tar xzf "$tmp/src.tgz" -C "$tmp/x" --no-same-owner --no-same-permissions 2>>"${SETUP_LOG:-/dev/null}"; then
@@ -125,7 +170,7 @@ run_self_update() {
 
 	# ls_install_code сам проверяет синтаксис и не трогает рабочий выпуск, пока новый не готов
 	local rel
-	rel="$(ls_install_code "$root" "GitHub ${SELF_UPDATE_REPO} ${ref} (коммит ${commit:0:7})")" || { rm -rf "$tmp"; return 1; }
+	rel="$(ls_install_code "$root" "GitHub ${SELF_UPDATE_REPO} ${ref} (коммит ${commit:0:7})$( ((signed)) && echo ', подпись проверена')")" || { rm -rf "$tmp"; return 1; }
 	rm -rf "$tmp"
 	ls_install_cli
 	_ls_refresh_maint_sync

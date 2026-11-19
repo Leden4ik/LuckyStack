@@ -56,9 +56,20 @@ Apache в мастере пока скрыт. С ним ставится тол�
 
 ## Как поставить
 
+Проще всего одной командой:
+
 ```bash
-curl -L https://github.com/Leden4ik/luckystack/archive/refs/heads/main.tar.gz | tar xz
-cd luckystack-main
+curl -fsSL https://raw.githubusercontent.com/Leden4ik/LuckyStack/main/get.sh | sudo bash
+```
+
+Она скачивает последний выпуск, проверяет его подпись и контрольную сумму и
+запускает установщик. Если подпись не сходится, ничего не ставится.
+
+Или вручную:
+
+```bash
+curl -L https://github.com/Leden4ik/LuckyStack/archive/refs/heads/main.tar.gz | tar xz
+cd LuckyStack-main
 sudo bash server-setup.sh
 ```
 
