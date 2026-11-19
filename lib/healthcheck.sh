@@ -297,6 +297,7 @@ run_healthcheck() {
 	if command -v openssl >/dev/null 2>&1; then
 		local crt d dom
 		# Сертификат панели ISPConfig — с определением издателя (LE / самоподписанный)
+		# shellcheck disable=SC2043  # один файл, цикл ради continue
 		for crt in /usr/local/ispconfig/interface/ssl/ispserver.crt; do
 			[[ -f "$crt" ]] || continue
 			local issuer note=""

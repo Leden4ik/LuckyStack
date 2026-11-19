@@ -1,0 +1,57 @@
+name: Проверки
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bash:
+    name: bash, ShellCheck, тесты
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Синтаксис bash
+        run: |
+          for f in server-setup.sh luckyctl lib/*.sh tests/repo-checks.sh $(find assets tools -name '*.sh' 2>/dev/null); do
+            bash -n "$f" || exit 1
+          done
+
+      - name: ShellCheck
+        run: |
+          shellcheck --version | head -2
+          shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh $(find assets -name '*.sh')
+
+      - name: Модульные тесты (bats)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats
+          LC_ALL=C.UTF-8 bats tests/unit
+
+      - name: Проверки репозитория
+        run: bash tests/repo-checks.sh
+
+  php:
+    name: синтаксис PHP панелей
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: php -l
+        run: |
+          php --version | head -1
+          find assets -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.txt || { grep -v '^No syntax errors' /tmp/php-lint.txt; exit 1; }
+          echo "файлов: $(grep -c '^No syntax errors' /tmp/php-lint.txt)"
+
+  secrets:
+    name: поиск секретов
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

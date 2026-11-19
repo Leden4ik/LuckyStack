@@ -138,6 +138,14 @@ run_timezone_mode() {
 	apply_timezone_everywhere "$tz" "$rdb"
 }
 
+# 0, если в файле hosts есть незакомментированная строка, где есть и полное, и короткое имя
+_hosts_has_pair() {
+	local fqdn="$1" short="$2" file="${3:-/etc/hosts}"
+	awk -v f="$fqdn" -v s="$short" '/^[[:space:]]*#/ {next}
+		{ hf = 0; hs = 0; for (i = 2; i <= NF; i++) { if ($i == f) hf = 1; if ($i == s) hs = 1 } if (hf && hs) found = 1 }
+		END { exit !found }' "$file" 2>/dev/null
+}
+
 stage_preflight() {
 	local fqdn="${SERVER_FQDN:-}" tz="${TIMEZONE:-UTC}"
 	local short="${fqdn%%.*}"
@@ -187,9 +195,7 @@ stage_preflight() {
 			# первое имя этой строки. Шаблоны хостеров пишут полное имя с чужим коротким
 			# («ad-srb.example.net d-srb») или без него, тогда hostname -f не работает вовсе,
 			# а Postfix и make-ssl-cert при установке получают короткое имя.
-			if ! awk -v f="$fqdn" -v s="$short" '/^[[:space:]]*#/ {next}
-					{ hf = 0; hs = 0; for (i = 2; i <= NF; i++) { if ($i == f) hf = 1; if ($i == s) hs = 1 } if (hf && hs) found = 1 }
-					END { exit !found }' /etc/hosts 2>/dev/null; then
+			if ! _hosts_has_pair "$fqdn" "$short" /etc/hosts; then
 				[[ -f /etc/hosts.luckystack.bak ]] || cp -a /etc/hosts /etc/hosts.luckystack.bak
 				printf '%s %s %s\n' "$main_ip" "$fqdn" "$short" >>/etc/hosts
 				ui_success "В /etc/hosts добавлено: ${main_ip} ${fqdn} ${short}"

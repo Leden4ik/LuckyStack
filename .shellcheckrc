@@ -1,0 +1,6 @@
+# Проверка ShellCheck для LuckyStack (запуск: shellcheck -x server-setup.sh luckyctl lib/*.sh ...)
+shell=bash
+# Модули подключаются через source с путём из переменной, ShellCheck их не видит:
+# отсюда «не могу проследить source» и «переменная не используется» для того,
+# что объявлено в одном модуле и читается в другом.
+disable=SC1090,SC1091,SC2034

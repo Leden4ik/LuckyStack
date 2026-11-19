@@ -306,16 +306,16 @@ NGINX_ALL_MODULES="HTTP3 BROTLI ZSTD PCRE2 ZLIBNG HEADERMOD CACHEPURGE SETMISC V
 
 _apply_nginx_profile() {
 	local p="$1" m
-	declare -A f=( [HTTP3]=n [BROTLI]=n [ZSTD]=n [PCRE2]=y [ZLIBNG]=n [HEADERMOD]=n \
+	declare -A feat=( [HTTP3]=n [BROTLI]=n [ZSTD]=n [PCRE2]=y [ZLIBNG]=n [HEADERMOD]=n \
 	               [CACHEPURGE]=n [SETMISC]=n [VTS]=n [JEMALLOC]=n [NATIVE_OPT]=n )
 	case "$p" in
-		recommended) f[HTTP3]=y f[BROTLI]=y f[ZSTD]=y f[ZLIBNG]=y f[HEADERMOD]=y \
-		             f[CACHEPURGE]=y f[SETMISC]=y f[JEMALLOC]=y ;;
-		full) f[HTTP3]=y f[BROTLI]=y f[ZSTD]=y f[ZLIBNG]=y f[HEADERMOD]=y \
-		      f[CACHEPURGE]=y f[SETMISC]=y f[VTS]=y f[JEMALLOC]=y f[NATIVE_OPT]=y ;;
+		recommended) feat[HTTP3]=y feat[BROTLI]=y feat[ZSTD]=y feat[ZLIBNG]=y feat[HEADERMOD]=y \
+		             feat[CACHEPURGE]=y feat[SETMISC]=y feat[JEMALLOC]=y ;;
+		full) feat[HTTP3]=y feat[BROTLI]=y feat[ZSTD]=y feat[ZLIBNG]=y feat[HEADERMOD]=y \
+		      feat[CACHEPURGE]=y feat[SETMISC]=y feat[VTS]=y feat[JEMALLOC]=y feat[NATIVE_OPT]=y ;;
 		minimal) : ;;   # только PCRE2=y (из дефолтов выше)
 	esac
-	for m in $NGINX_ALL_MODULES; do config_set "NGX_$m" "${f[$m]}"; done
+	for m in $NGINX_ALL_MODULES; do config_set "NGX_$m" "${feat[$m]}"; done
 	config_set NGINX_PROFILE "$p"
 	ui_success "Профиль nginx: ${p}"
 }
@@ -802,7 +802,7 @@ run_wizard() {
 				[[ "$_ip" == "$_primary" ]] && continue
 				_ordered+=" $_ip"
 			done
-			_arr=($_ordered)
+			read -ra _arr <<<"$_ordered"
 			ui_info "IP сервера (scope global): ${_ordered:-—}"
 			for _i in $(seq 1 "$_nsc"); do
 				_def="${_arr[$((_i-1))]:-${_arr[0]:-$_primary}}"

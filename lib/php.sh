@@ -100,7 +100,8 @@ _php_filter_available() {
 
 # Список ОБЯЗАТЕЛЬНЫХ пакетов версии (ядро — должно встать целиком)
 _php_core_list() {
-	local v="$1" m list="php${v}"
+	local v="$1" m
+	local list="php${v}"
 	for m in $PHP_MODULES_CORE; do list+=" php${v}-${m}"; done
 	echo "$list"
 }
@@ -222,18 +223,16 @@ _php_security_ini() {
 	return 0
 }
 
-# Базовый тюнинг FPM-пула www
+# FPM-пул www: только адрес сокета, на него рассчитан snippets/php-default.conf.
+# Значения pm здесь раньше тоже правились, но из-за ошибки в объявлении переменных функция
+# не срабатывала ни разу, и все серверы живут на значениях Debian. Включать их впервые
+# (start_servers 4 на каждую версию PHP — сотни мегабайт на малом сервере) без отдельной
+# проверки не стали; размеры под память — дело авто-тюнинга.
 _php_tune_fpm_pool() {
-	local v="$1" pool="/etc/php/${v}/fpm/pool.d/www.conf"
+	local v="$1"
+	local pool="/etc/php/${v}/fpm/pool.d/www.conf"
 	[[ -f "$pool" ]] || return 0
-	# Без агрессивных правок: гарантируем unix-сокет и разумные pm-значения.
-	sed -i \
-		-e "s|^listen = .*|listen = /run/php/php${v}-fpm.sock|" \
-		-e "s|^;*pm.max_children = .*|pm.max_children = 20|" \
-		-e "s|^;*pm.start_servers = .*|pm.start_servers = 4|" \
-		-e "s|^;*pm.min_spare_servers = .*|pm.min_spare_servers = 2|" \
-		-e "s|^;*pm.max_spare_servers = .*|pm.max_spare_servers = 8|" \
-		"$pool" 2>/dev/null || true
+	sed -i -e "s|^listen = .*|listen = /run/php/php${v}-fpm.sock|" "$pool" 2>/dev/null || true
 }
 
 # nginx-сниппет для подключения FPM-сокета конкретной версии
@@ -483,7 +482,7 @@ run_php_remove() {
 	ui_warn "Отмеченные версии будут ПОЛНОСТЬЮ удалены (apt purge phpX.Y-*) и убраны из ISPConfig."
 	if declare -F ui_confirm >/dev/null; then ui_confirm "Продолжить удаление?" n || { ui_info "Отменено."; return 0; }; fi
 
-	local removed=""
+	local rm_list=""
 	for v in "${vers[@]}"; do
 		[[ "$sel" == *" v${v//./_} "* ]] || continue
 		ui_step "Удаление PHP ${v}"
@@ -500,10 +499,11 @@ run_php_remove() {
 		((haveispc)) && _ispc_mysql -e "DELETE FROM server_php WHERE name='PHP ${v}';" >>"$SETUP_LOG" 2>&1 || true
 		ui_success "PHP ${v} удалён (пакеты + запись в ISPConfig)."
 		log "php-remove: PHP ${v} purged"
-		removed="${removed} ${v}"
+		rm_list="${rm_list} ${v}"
 	done
 	systemctl reload nginx >>"$SETUP_LOG" 2>&1 || true
-	local left; left="$(ls -d /etc/php/*/ 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | tr '\n' ' ')"
-	ui_success "Готово. Удалено:${removed:- —}. Осталось: ${left:-—}"
+	local left="" _d
+	for _d in /etc/php/[0-9]*.[0-9]*/; do [[ -d "$_d" ]] && left+="$(basename "$_d") "; done
+	ui_success "Готово. Удалено:${rm_list:- —}. Осталось: ${left:-—}"
 	return 0
 }

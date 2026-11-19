@@ -1306,3 +1306,33 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
 - **acme.sh** хранит серты в `/root/.acme.sh` (не `/etc/letsencrypt`).
 - **ISPConfig nightly** в `--status` сверяется по ДАТЕ сборки (Last-Modified nightly-тарбола vs
   `ISPCONFIG_INSTALL_DATE`), а не по stable-версии — иначе nightly всегда «отставала» бы от stable.
+
+---
+
+## Разработка и выпуск
+
+Ветки: `main` — только выпущенный код, на него смотрят `luckyctl self-update` и страница
+документации; `dev` — работа. В `main` код попадает только через `tools/release.sh`.
+
+**Проверки на каждую отправку** (`.github/workflows/check.yml`, GitHub Actions):
+
+- `bash -n` всех скриптов;
+- ShellCheck на уровне warning (`.shellcheckrc`: отключены только правила, которые не работают
+  с модулями, подключаемыми через `source` с путём из переменной). Ложные срабатывания помечаются
+  на месте комментарием `# shellcheck disable=…` с причиной;
+- модульные тесты `tests/unit/*.bats` (bats-core). Модули подключаются по отдельности, вывод
+  заглушен (`tests/unit/helpers.bash`); пути к системным файлам, где нужно, подменяются
+  переменными (например `LS_NGINX_CONF`);
+- `tests/repo-checks.sh`: права на запуск у `server-setup.sh` и `luckyctl`, `VERSION` совпадает
+  с верхней записью `CHANGELOG.md`, у тега совпадает с версией, нет CRLF, лицензия на месте;
+- `php -l` всех PHP-файлов панелей;
+- поиск секретов (gitleaks).
+
+Локально то же: `shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh`,
+`LC_ALL=C.UTF-8 bats tests/unit`, `bash tests/repo-checks.sh`.
+
+**Выпуск**: изменения копятся в `CHANGELOG.md` в разделе `## Не выпущено`, затем
+`tools/release.sh X.Y.Z`. Скрипт переименует раздел в `## X.Y.Z — дата`, ставит `VERSION`, гоняет проверки, коммитит «Выпуск X.Y.Z»,
+отправляет `dev`, ждёт зелёных проверок GitHub Actions, перематывает `main`, ставит тег
+`vX.Y.Z`, делает релиз с текстом из CHANGELOG и скачивает архив релиза, чтобы проверить в нём
+версию и права на запуск. `tools/release.sh X.Y.Z --dry-run` — только проверки.

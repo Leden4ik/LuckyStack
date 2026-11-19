@@ -419,7 +419,8 @@ _panel_fqdn_only_nginx() {
 # --- apache: <If "%{HTTP_HOST} !~ /FQDN/"> Require all denied </If> в vhost панели ---
 # ВНИМАНИЕ: реализация не проверена на живом Apache — нужна верификация configtest'ом.
 _panel_fqdn_only_apache() {
-	local fqdn="$1" esc="${fqdn//./\\.}"
+	local fqdn="$1"
+	local esc="${fqdn//./\\.}"
 	local vhost="" cand
 	for cand in /etc/apache2/sites-available/ispconfig.vhost /etc/apache2/sites-enabled/000-ispconfig.vhost; do
 		[[ -f "$cand" ]] && { vhost="$cand"; break; }

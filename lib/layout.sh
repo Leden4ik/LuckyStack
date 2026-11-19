@@ -121,6 +121,7 @@ ls_install_cli() {
 ls_code_dir() { echo "$LS_OPT_DIR/current"; }
 
 # Панель обслуживания знает, где код, настройки и журнал. Обновляем, если панель стоит.
+# shellcheck disable=SC2120  # аргумент create передаёт ispconfig.sh
 ls_update_maint_conf() {
 	local f=/usr/local/ispconfig/server/scripts/ss-maint.conf
 	[[ -d /usr/local/ispconfig/server/scripts ]] || return 0

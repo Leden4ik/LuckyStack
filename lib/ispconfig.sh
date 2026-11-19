@@ -819,7 +819,7 @@ _modernize_vhost_file() {
 	# Убираем дубли из vhost, только если глобальный заголовок с тем же именем включён. Referrer-Policy
 	# у панели строже (same-origin), поэтому не удаляем, а переводим в more_set_headers: он перекрывает
 	# глобальное значение для этого server.
-	local g_xct=0 g_xfo=0 g_ref=0 nc=/etc/nginx/nginx.conf
+	local g_xct=0 g_xfo=0 g_ref=0 nc="${LS_NGINX_CONF:-/etc/nginx/nginx.conf}"
 	grep -qE "^[[:space:]]*more_set_headers[[:space:]]+'X-Content-Type-Options:" "$nc" 2>/dev/null && g_xct=1
 	grep -qE "^[[:space:]]*more_set_headers[[:space:]]+'X-Frame-Options:" "$nc" 2>/dev/null && g_xfo=1
 	grep -qE "^[[:space:]]*more_set_headers[[:space:]]+'Referrer-Policy:" "$nc" 2>/dev/null && g_ref=1
@@ -1926,12 +1926,14 @@ _ispconfig_crowdsec_shared_migrate() {
 		sed -i -E 's#access_log [^;]*httpd/[^;]*crowdsec\.log crowdsec_realip;#access_log /var/log/nginx/crowdsec.log crowdsec_realip;#g' "$t"
 	done
 	# 2) Существующие СГЕНЕРИРОВАННЫЕ vhost'ы (путь уже с реальным доменом, без пробела)
+	# shellcheck disable=SC2178  # changed здесь число; массив с тем же именем живёт в другой функции
 	local d=/etc/nginx/sites-available changed=0 f
 	[[ -d "$d" ]] || return 0
 	shopt -s nullglob
 	for f in "$d"/*.vhost; do
 		grep -q 'httpd/[^;]*crowdsec\.log crowdsec_realip' "$f" || continue
 		sed -i -E 's#access_log [^;]*httpd/[^;]*crowdsec\.log crowdsec_realip;#access_log /var/log/nginx/crowdsec.log crowdsec_realip;#g' "$f"
+		# shellcheck disable=SC2178  # changed здесь число; массив с тем же именем живёт в другой функции
 		changed=1
 	done
 	shopt -u nullglob

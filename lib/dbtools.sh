@@ -296,6 +296,7 @@ stage_postgresql() {
 
 	local pg_pw
 	pg_pw="$(config_get_or_gen_password POSTGRES_PASSWORD 24)"
+	# shellcheck disable=SC2024  # журнал пишет root, а не postgres, так и задумано
 	sudo -u postgres psql -c "ALTER USER postgres PASSWORD '${pg_pw}';" >>"$SETUP_LOG" 2>&1 || \
 		ui_warn "Не удалось задать пароль роли postgres."
 	ui_success "PostgreSQL установлен (пароль роли postgres — в setup.conf: POSTGRES_PASSWORD)."
