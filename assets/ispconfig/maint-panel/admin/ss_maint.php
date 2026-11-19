@@ -34,8 +34,11 @@ $SET_GROUPS = array(
 	'set_group_security_txt' => array('NGX_TIGHT_TIMEOUTS' => 0, 'SEC_SERVICE_HARDEN' => 0, 'SEC_AUTO_UPDATES_3RD' => 0, 'SEC_USERNS_OFF' => 0, 'SSH_TCP_FORWARD' => 0, 'FTP_TLS_REQUIRED' => 0, 'RC_BRANCH' => array('1.6', '1.7')),
 );
 
+$TABS = array('overview', 'update', 'changes', 'settings', 'audit');
 $tab = isset($_GET['tab']) ? (string)$_GET['tab'] : 'overview';
-if(!in_array($tab, array('overview', 'update', 'settings', 'audit'), true)) $tab = 'overview';
+if(!in_array($tab, $TABS, true)) $tab = 'overview';
+// Разделы проверки сервера, которые показываем отдельным блоком (luckyctl cve и blacklist)
+$FIX_GROUPS = array('Исправления безопасности', 'Репутация почты');
 
 $msg = '';
 $pending = $app->db->queryOneRecord("SELECT id, action, status FROM ss_maint_job WHERE status IN ('pending','running') ORDER BY id ASC LIMIT 1");
@@ -102,7 +105,7 @@ if($problem !== '') echo '<div class="alert alert-danger"><b>'.$h(_mL('installer
 elseif($g('installer_dir') === '') echo '<div class="alert alert-info">'.$h(_mL('no_data_txt')).'</div>';
 
 echo '<ul class="nav nav-tabs" style="margin-bottom:15px">';
-foreach(array('overview', 'update', 'settings', 'audit') as $t) {
+foreach($TABS as $t) {
 	echo '<li'.($t === $tab ? ' class="active"' : '').'><a href="#" class="ss-mt-nav" data-u="'.$h($page.'?tab='.$t).'">'.$h(_mL('tab_'.$t.'_txt')).'</a></li>';
 }
 echo '</ul>';
@@ -119,15 +122,23 @@ $FIXES = array(
 	'/OpenSSL/u'                                      => $page.'?tab=settings',
 	'/Пакетов к обновлению|setup\.log/u'              => $page.'?tab=update',
 	'/Shell-пользовател/u'                            => 'sites/shell_user_list.php',
+	'/^PHP [0-9.]+:? поддержка закончилась/u'        => 'sites/web_vhost_domain_list.php',
+	'/luckyctl update (nginx|pkgs)/u'                 => $page.'?tab=update',
 	'/^PHP [0-9.]+/u'                                 => 'sites/web_vhost_domain_list.php',
 );
+// Пояснение к строке проверки: текст с рабочими ссылками (адреса только https, после экранирования)
+$note = function($c) use ($h) {
+	if(empty($c[2])) return '';
+	$t = preg_replace('#(https://[A-Za-z0-9./_-]+)#', '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>', $h($c[2]));
+	return '<br><span class="help-block" style="display:inline">'.$t.'</span>';
+};
 $fix = function($lvl, $text) use ($FIXES, $h) {
 	if($lvl === 'ok') return '';
 	foreach($FIXES as $re => $u) if(preg_match($re, $text)) return ' <a href="#" class="btn btn-default btn-xs ss-mt-nav" data-u="'.$h($u).'">'.$h(_mL('fix_btn_txt')).'</a>';
 	return '';
 };
 
-$icon = array('ok' => '<span class="text-success">✓</span>', 'warn' => '<span class="text-warning">!</span>', 'fail' => '<span class="text-danger">✗</span>');
+$icon = array('ok' => '<span class="text-success">✓</span>', 'warn' => '<span class="text-warning">!</span>', 'fail' => '<span class="text-danger">✗</span>', 'info' => '<span class="text-muted">i</span>');
 $dis = ($busy || !$can_run) ? ' style="opacity:.5;pointer-events:none"' : '';
 
 if($tab === 'overview') {
@@ -154,6 +165,23 @@ if($tab === 'overview') {
 	}
 
 	$hc = $J('health');
+	// Исправления безопасности и репутация почты: все строки, вместе с «в порядке»
+	$fx = array();
+	foreach($FIX_GROUPS as $gn) if(!empty($hc['groups'][$gn])) $fx[$gn] = $hc['groups'][$gn];
+	echo '<h3>'.$h(_mL('fixes_head_txt')).'</h3><p class="help-block">'.$h(_mL('fixes_desc_txt')).'</p>';
+	if(empty($fx)) echo '<p class="help-block">'.$h(_mL('no_data_txt')).'</p>';
+	else {
+		echo '<table class="table" style="max-width:820px"><colgroup><col style="width:28px"><col></colgroup><tbody>';
+		foreach($fx as $gn => $rows) {
+			echo '<tr><th colspan="2" style="padding-top:14px">'.$h($gn).'</th></tr>';
+			foreach($rows as $c) {
+				$lv = isset($icon[$c[0]]) ? $c[0] : 'info';
+				echo '<tr><td style="width:24px">'.$icon[$lv].'</td><td>'.$h($c[1]).$fix($lv, $c[1]).$note($c).'</td></tr>';
+			}
+		}
+		echo '</tbody></table>';
+	}
+
 	echo '<h3>'.$h(_mL('health_head_txt')).'</h3>';
 	if(empty($hc['groups'])) echo '<p class="help-block">'.$h(_mL('no_data_txt')).'</p>';
 	else {
@@ -162,9 +190,9 @@ if($tab === 'overview') {
 		echo '<table class="table" style="max-width:820px"><tbody>';
 		$any = false;
 		foreach($hc['groups'] as $gn => $rows) foreach($rows as $c) {
-			if($c[0] === 'ok') continue;
+			if($c[0] === 'ok' || $c[0] === 'info' || in_array($gn, $FIX_GROUPS, true)) continue;
 			$any = true;
-			echo '<tr><td style="width:24px">'.$icon[$c[0]].'</td><td style="width:220px">'.$h($gn).'</td><td>'.$h($c[1]).$fix($c[0], $c[1]).'</td></tr>';
+			echo '<tr><td style="width:24px">'.$icon[$c[0]].'</td><td style="width:220px">'.$h($gn).'</td><td>'.$h($c[1]).$fix($c[0], $c[1]).$note($c).'</td></tr>';
 		}
 		if(!$any) echo '<tr><td>'.$icon['ok'].'</td><td colspan="2">'.$h(_mL('health_all_ok_txt')).'</td></tr>';
 		echo '</tbody></table>';
@@ -219,6 +247,31 @@ if($tab === 'update') {
 	}
 }
 
+if($tab === 'changes') {
+	echo '<p>'.$h(_mL('changes_desc_txt')).'</p>';
+	$ch = $J('changes');
+	$steps = isset($ch['steps']) && is_array($ch['steps']) ? $ch['steps'] : array();
+	if(empty($steps)) echo '<p class="help-block">'.$h(_mL('changes_empty_txt')).'</p>';
+	else {
+		$opc = array('+' => 'text-success', '~' => 'text-warning', '-' => 'text-danger');
+		echo '<table class="table" style="max-width:980px"><thead class="dark"><tr><th style="width:150px">'.$h(_mL('col_when_txt')).'</th><th>'.$h(_mL('changes_step_txt')).'</th><th style="width:90px">'.$h(_mL('changes_files_txt')).'</th></tr></thead><tbody>';
+		foreach($steps as $i => $s) {
+			$files = isset($s['files']) && is_array($s['files']) ? $s['files'] : array();
+			$total = (int)(isset($s['total']) ? $s['total'] : count($files));
+			echo '<tr><td style="white-space:nowrap">'.$h(isset($s['time']) ? $s['time'] : '').'</td><td><a href="#" class="ss-mt-toggle" data-i="'.(int)$i.'">'.$h(isset($s['label']) ? $s['label'] : '').'</a>'
+				.'<div class="ss-mt-files" id="ss_mt_f'.(int)$i.'" style="display:none;margin-top:6px;font-family:monospace;font-size:12px;word-break:break-all">';
+			foreach($files as $f) {
+				$op = (is_array($f) && isset($f[0], $opc[$f[0]])) ? $f[0] : '~';
+				echo '<div><span class="'.$opc[$op].'">'.$h($op).'</span> '.$h(isset($f[1]) ? $f[1] : '').'</div>';
+			}
+			if($total > count($files)) echo '<div class="help-block">'.$h(_mL('changes_more_txt')).' '.($total - count($files)).'</div>';
+			echo '</div></td><td>'.$total.'</td></tr>';
+		}
+		echo '</tbody></table>';
+		echo '<p class="help-block">'.$h(_mL('changes_hint_txt')).'</p>';
+	}
+}
+
 if($tab === 'settings') {
 	$cfg = $J('cfg');
 	$used = $J('module_used');
@@ -268,6 +321,7 @@ jQuery(function($){
 	var txtRollback = <?php echo json_encode(_mL('rollback_confirm_txt'), JSON_UNESCAPED_UNICODE); ?>;
 	$(document).off('click.mtnav').on('click.mtnav','.ss-mt-nav',function(e){e.preventDefault(); nav($(this).data('u'));});
 	$(document).off('click.mtact').on('click.mtact','.ss-mt-act',function(e){e.preventDefault(); ssAct(self,{do:$(this).data('do')});});
+	$(document).off('click.mttg').on('click.mttg','.ss-mt-toggle',function(e){e.preventDefault(); $('#ss_mt_f'+parseInt($(this).data('i'),10)).toggle();});
 	$('#mt_run').off('click.mt').on('click.mt',function(e){e.preventDefault();
 		var it=[], hasCore=false;
 		$('.ss-mt-item:checked').each(function(){ it.push(this.value); if($.inArray(this.value,core)>=0)hasCore=true; });

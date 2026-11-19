@@ -129,4 +129,13 @@ $wb['set_RC_BRANCH_txt'] = 'Roundcube branch';
 $wb['set_RC_BRANCH_hint_txt'] = '1.6 LTS or the newer 1.7.';
 $wb['audit_desc_txt'] = 'Recent actions in our panels: who, when and from which IP.';
 $wb['audit_empty_txt'] = 'No records yet.';
+$wb['tab_changes_txt'] = 'File changes';
+$wb['fixes_head_txt'] = 'Security fixes and mail reputation';
+$wb['fixes_desc_txt'] = 'Whether fixes are out for nginx, OpenSSL and PHP, and whether the server IP or mail domains are on blacklists. Refreshed with the server check. In the terminal: luckyctl cve and luckyctl blacklist.';
+$wb['changes_desc_txt'] = 'Which config files each installer step added (+), changed (~) or removed (-): install, update, add-php, time zone change, rollback, restore. Click a step to see its files.';
+$wb['changes_empty_txt'] = 'The log is empty: it is kept since version 0.1.5 and fills on the next update.';
+$wb['changes_step_txt'] = 'Step';
+$wb['changes_files_txt'] = 'Files';
+$wb['changes_more_txt'] = 'and more:';
+$wb['changes_hint_txt'] = 'Full log and one file history in the terminal: luckyctl changes, luckyctl changes /path/to/file.';
 ?>

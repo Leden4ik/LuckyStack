@@ -47,6 +47,9 @@ $BACKUP  = '/usr/local/sbin/server-backup.sh';
 $ROLLBACK_TARGETS = array('nginx', 'roundcube');
 $ITEMS_CORE = array('nginx', 'ispconfig');
 $RC_BACKUP_FAILED = 90;   // код: бэкап не удался, обновление не запускалось
+// Разделы проверки, о которых сообщает ежедневный монитор (luckyctl cve и blacklist): панель их
+// в свои оповещения не берёт, иначе одна и та же находка приходила бы дважды.
+$MONITOR_GROUPS = array('Исправления безопасности', 'Репутация почты');
 
 // Пункты --update, которые можно запускать из панели.
 $ITEMS = array('pkgs', 'security', 'confcustom', 'tuning', 'mail', 'certs', 'rcplugins', 'backup', 'notify', 'nginx', 'ispconfig');
@@ -125,11 +128,15 @@ function mm_notify($level, $subj, $body) {
 // Новые проблемы по сравнению с прошлым разом. Числа убираем из сравнения, иначе «занято 81%» и
 // «занято 82%» считались бы разными проблемами. Первый запуск только запоминает состояние.
 function mm_alerts() {
+	global $MONITOR_GROUPS;
 	$now = array();
 	$add = function($c) use (&$now) { if(is_array($c) && isset($c[0], $c[1]) && $c[0] !== 'ok') $now[preg_replace('/[0-9]+/', '#', $c[1])] = $c; };
 	foreach((array)json_decode(mm_get('checks', '[]'), true) as $c) $add($c);
 	$hc = json_decode(mm_get('health', '{}'), true);
-	if(is_array($hc) && !empty($hc['groups'])) foreach($hc['groups'] as $rows) foreach($rows as $c) $add($c);
+	if(is_array($hc) && !empty($hc['groups'])) foreach($hc['groups'] as $gn => $rows) {
+		if(in_array($gn, $MONITOR_GROUPS, true)) continue;
+		foreach($rows as $c) $add($c);
+	}
 	$raw = mm_get('alert_state', '');
 	$keys = array_keys($now);
 	if($raw === '') { mm_set('alert_state', json_encode($keys, JSON_UNESCAPED_UNICODE)); return; }
@@ -331,6 +338,32 @@ function mm_collect() {
 	if(isset($cur['SEC_AUTO_UPDATES_3RD']) && $cur['SEC_AUTO_UPDATES_3RD'] !== 'y') $add('warn', 'Автообновления PHP и MariaDB выключены, новые выпуски ставятся только вручную');
 
 	mm_set('checks', json_encode($c, JSON_UNESCAPED_UNICODE));
+	mm_changes();
+}
+
+// --- Журнал изменений файлов (luckyctl changes): последние шаги для вкладки панели ---------
+// Журнал закрыт для всех, кроме root, поэтому читаем его здесь и кладём в базу короткую выжимку.
+function mm_changes() {
+	$slog = mm_setup_log();
+	$file = ($slog !== '' ? dirname($slog) : '/var/log/luckystack').'/changes.log';
+	if(!is_file($file) || fileowner($file) !== 0) { mm_set('changes', json_encode(array('steps' => array()))); return; }
+	$sz = filesize($file);
+	$fp = @fopen($file, 'r'); if(!$fp) return;
+	if($sz > 400000) fseek($fp, $sz - 400000);
+	$data = (string)stream_get_contents($fp); fclose($fp);
+	if($sz > 400000) { $p = strpos($data, "\n"); if($p !== false) $data = substr($data, $p + 1); }
+	$steps = array(); $idx = array();
+	foreach(explode("\n", $data) as $l) {
+		$f = explode("\t", $l);
+		if(count($f) !== 4 || !in_array($f[2], array('+', '~', '-'), true)) continue;
+		$k = $f[0]."\t".$f[1];
+		if(!isset($idx[$k])) { $idx[$k] = count($steps); $steps[] = array('time' => $f[0], 'label' => $f[1], 'total' => 0, 'files' => array()); }
+		$i = $idx[$k];
+		$steps[$i]['total']++;
+		if(count($steps[$i]['files']) < 40) $steps[$i]['files'][] = array($f[2], $f[3]);
+	}
+	$steps = array_reverse(array_slice($steps, -20));
+	mm_set('changes', json_encode(array('steps' => $steps), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
 }
 
 // --- Проверка здоровья: разбор вывода --healthcheck --------------------------
@@ -346,6 +379,13 @@ function mm_healthcheck() {
 			$lvl = ($m[1] === '✓') ? 'ok' : (($m[1] === '!') ? 'warn' : 'fail');
 			$counts[$lvl]++;
 			$groups[$g][] = array($lvl, $m[2]);
+			continue;
+		}
+		// пояснение без значка («серьёзные: …», ссылка на заявку): к предыдущей строке раздела
+		if($g !== '' && preg_match('/^│\s{3,}(\S.*?)\s*│?\s*$/u', $l, $m)) {
+			$n = isset($groups[$g]) ? count($groups[$g]) : 0;
+			if($n > 0) $groups[$g][$n - 1][2] = (isset($groups[$g][$n - 1][2]) ? $groups[$g][$n - 1][2].' ' : '').$m[1];
+			else $groups[$g][] = array('info', $m[1]);
 		}
 	}
 	if(array_sum($counts) === 0) return 'не удалось разобрать вывод проверки';
