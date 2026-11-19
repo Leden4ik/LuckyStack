@@ -1329,11 +1329,28 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
   переменными (например `LS_NGINX_CONF`);
 - `tests/repo-checks.sh`: права на запуск у `server-setup.sh` и `luckyctl`, `VERSION` совпадает
   с верхней записью `CHANGELOG.md`, у тега совпадает с версией, нет CRLF, лицензия на месте;
-- `php -l` всех PHP-файлов панелей;
+- `php -l` всех PHP-файлов панелей и тестов;
 - поиск секретов (gitleaks).
 
-Локально то же: `shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh`,
+Локально то же: `shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh tests/e2e/*.sh tools/*.sh`,
 `LC_ALL=C.UTF-8 bats tests/unit`, `bash tests/repo-checks.sh`.
+
+**Сквозные тесты** (`tests/e2e`) гоняются на тестовом сервере с уже установленным стеком:
+`tools/e2e.sh root@хост [порт] [набор ...]` берёт `tests/e2e` из последнего коммита и запускает
+на сервере `run.sh`. Наборы:
+
+- `hosting`: временный API-пользователь, через API ISPConfig клиент с сайтом, базой, ящиком и
+  DNS-зоной; сайт с PHP и базой, пул PHP-FPM, SOA и MX, приём на 25, отправка на 587 с паролем,
+  письма во входящих (IMAPS), POP3S, ManageSieve, проверка письма антиспамом;
+- `restore`: снимок, порча базы, файла сайта и писем, `server-backup.sh --restore`, всё на месте
+  с прежними владельцами, службы и сайт работают;
+- `notify`: Telegram подменяется заглушкой на 127.0.0.1, сообщение уходит в оба чата,
+  выключенное событие не шлётся, монитор замечает остановленную службу;
+- `health`: `luckyctl check` без ошибок, `status`, `version`, `cve`, `blacklist`, `paths`.
+
+В конце всегда идёт уборка: клиент удаляется со всем содержимым, временный API-пользователь
+тоже, настройки бэкапа и уведомлений возвращаются. Тесты создают и удаляют данные, поэтому
+запускаются только на сервере с файлом `/etc/luckystack/e2e-allowed`. Код выхода 0, если нет FAIL.
 
 **Выпуск**: изменения копятся в `CHANGELOG.md` в разделе `## Не выпущено`, затем
 `tools/release.sh X.Y.Z`. Скрипт переименует раздел в `## X.Y.Z — дата`, ставит `VERSION`, гоняет проверки, коммитит «Выпуск X.Y.Z»,

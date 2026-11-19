@@ -46,8 +46,8 @@ git update-index --chmod=+x server-setup.sh luckyctl tools/release.sh 2>/dev/nul
 git add server-setup.sh
 
 step "Локальные проверки"
-for f in server-setup.sh luckyctl lib/*.sh tests/repo-checks.sh tools/*.sh; do bash -n "$f" || die "синтаксис: $f"; done
-if command -v shellcheck >/dev/null; then shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh || die "ShellCheck"
+for f in server-setup.sh luckyctl lib/*.sh tests/repo-checks.sh tests/e2e/*.sh tools/*.sh; do bash -n "$f" || die "синтаксис: $f"; done
+if command -v shellcheck >/dev/null; then shellcheck -x -S warning server-setup.sh luckyctl lib/*.sh tests/e2e/*.sh tools/*.sh || die "ShellCheck"
 else echo "ShellCheck локально нет, проверит GitHub Actions"; fi
 if command -v bats >/dev/null; then LC_ALL=C.UTF-8 bats tests/unit || die "тесты"
 else echo "bats локально нет, проверит GitHub Actions"; fi
