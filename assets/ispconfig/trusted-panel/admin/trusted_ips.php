@@ -142,7 +142,7 @@ echo '<a href="#" class="btn btn-default formbutton-success" id="tr_add">'.$h(_t
 echo '</div>';
 
 // список
-echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_tL('list_head_txt')).'</p>';
+echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_tL('list_head_txt')).'</h3>';
 if(empty($rows)) {
 	echo '<div class="alert alert-info">'.$h(_tL('empty_txt')).'</div>';
 } else {
@@ -165,13 +165,13 @@ if(empty($rows)) {
 // другие allowlist CrowdSec (только чтение)
 $other = isset($st['other_allowlists']) ? json_decode($st['other_allowlists'], true) : array();
 if(is_array($other) && !empty($other)) {
-	echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_tL('other_head_txt')).'</p><ul>';
+	echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_tL('other_head_txt')).'</h3><ul>';
 	foreach($other as $o) echo '<li><b>'.$h($o['name']).'</b>'.($o['description'] !== '' ? ' — '.$h($o['description']) : '').': <code>'.$h(implode(', ', (array)$o['values'])).'</code></li>';
 	echo '</ul>';
 }
 
 // проверка IP
-echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_tL('lookup_head_txt')).'</p>';
+echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_tL('lookup_head_txt')).'</h3>';
 echo '<div class="form-group" style="max-width:640px;">';
 echo '<input type="text" id="tr_lookup" class="form-control" placeholder="'.$h(_tL('lookup_ph_txt')).'" style="display:inline-block;width:240px;"> ';
 echo '<a href="#" class="btn btn-default" id="tr_lookup_btn">'.$h(_tL('lookup_btn_txt')).'</a>';

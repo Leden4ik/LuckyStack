@@ -103,12 +103,12 @@ echo '<a class="btn btn-default" href="#" data-load-content="sites/web_vhost_dom
 echo '</p>';
 
 if($file_drift) {
-	echo '<p class="fieldset-legend">'.$h(_fzL('freeze_live_label_txt')).'</p>';
+	echo '<h3 class="ss-legend">'.$h(_fzL('freeze_live_label_txt')).'</h3>';
 	echo '<textarea class="form-control" rows="20" readonly style="font-family:monospace;white-space:pre;margin-bottom:16px">'.$h($live).'</textarea>';
 }
 
 // сгенерированный core vhost (read-only)
-echo '<p class="fieldset-legend">'.$h(_fzL('freeze_generated_label_txt')).'</p>';
+echo '<h3 class="ss-legend">'.$h(_fzL('freeze_generated_label_txt')).'</h3>';
 echo '<textarea class="form-control" rows="20" readonly style="font-family:monospace;white-space:pre">'.$h($gen !== '' ? $gen : _fzL('freeze_generated_empty_txt')).'</textarea>';
 echo '<script type="text/javascript">jQuery(function($){'
 	.'$(document).off("click.fz").on("click.fz",".ss-fz-act",function(e){e.preventDefault();'

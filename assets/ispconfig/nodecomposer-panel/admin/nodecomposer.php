@@ -141,9 +141,9 @@ echo '</p>';
 // --- панель действий ---
 if($global) {
 	echo '<div class="alert alert-danger"><b>'.$h(_ncL('global_warn_head_txt')).'</b> '.$h(_ncL('global_warn_txt')).'</div>';
-	echo '<p class="fieldset-legend">'.$h(_ncL('global_scope_txt')).' — <code>'.($tool==='composer'?'composer global':'npm -g').'</code></p>';
+	echo '<h3 class="ss-legend">'.$h(_ncL('global_scope_txt')).' — <code>'.($tool==='composer'?'composer global':'npm -g').'</code></h3>';
 } else {
-	echo '<p class="fieldset-legend">'.$h(_ncL('project_txt')).': <code>'.$h($relpath ?: '(home)').'</code> · '.$h($manifest).'</p>';
+	echo '<h3 class="ss-legend">'.$h(_ncL('project_txt')).': <code>'.$h($relpath ?: '(home)').'</code> · '.$h($manifest).'</h3>';
 }
 echo '<p>';
 echo '<a class="btn btn-default ss-nc-act" href="#" '.$aact('scan').$nc_dis.'>'.$h(_ncL('rescan_txt')).'</a> ';
@@ -176,14 +176,14 @@ if(empty($pkgs)) {
 // полный вывод последнего «outdated» (в таблице задач он обрезан)
 $od = $app->db->queryOneRecord("SELECT result, processed FROM nodecomposer_action WHERE tool=? AND domain_id=? AND relpath=? AND action='outdated' AND status='done' ORDER BY id DESC LIMIT 1", $tool, $scope_did, $relpath);
 if(is_array($od) && trim((string)$od['result']) !== '') {
-	echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_ncL('outdated_txt')).' <span class="help-block" style="display:inline">('.$h($od['processed']).')</span></p>';
+	echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_ncL('outdated_txt')).' <span class="help-block" style="display:inline">('.$h($od['processed']).')</span></h3>';
 	echo '<pre style="max-height:340px;overflow:auto;">'.$h((string)$od['result']).'</pre>';
 }
 
 // последние задачи
 $jobs = $app->db->queryAllRecords("SELECT action, package, status, result, processed FROM nodecomposer_action WHERE tool=? AND domain_id=? ORDER BY id DESC LIMIT 8", $tool, $scope_did);
 if(is_array($jobs) && !empty($jobs)) {
-	echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_ncL('jobs_txt')).'</p><table class="table"><thead class="dark"><tr><th>'.$h(_ncL('action_txt')).'</th><th>'.$h(_ncL('pkg_txt')).'</th><th>'.$h(_ncL('status_txt')).'</th><th>'.$h(_ncL('when_txt')).'</th></tr></thead><tbody>';
+	echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_ncL('jobs_txt')).'</h3><table class="table"><thead class="dark"><tr><th>'.$h(_ncL('action_txt')).'</th><th>'.$h(_ncL('pkg_txt')).'</th><th>'.$h(_ncL('status_txt')).'</th><th>'.$h(_ncL('when_txt')).'</th></tr></thead><tbody>';
 	foreach($jobs as $j) {
 		$cls = ($j['status']==='done')?'text-success':(($j['status']==='error')?'text-danger':(($j['status']==='running')?'text-warning':''));
 		echo '<tr><td>'.$h($j['action']).'</td><td><code>'.$h($j['package']).'</code></td><td class="'.$cls.'"><b>'.$h($j['status']).'</b>'.($j['result']?' <span class="help-block" style="display:inline">'.$h(mb_substr((string)$j['result'],-90)).'</span>':'').'</td><td>'.$h($j['processed']).'</td></tr>';

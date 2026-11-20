@@ -67,21 +67,24 @@ if(empty($jails)) {
 	}
 	echo '</tbody></table>';
 
-	// забаненные IP по каждому джейлу + кнопка «разбанить»
+	// забаненные IP по каждому джейлу + кнопка «разбанить»; джейлы без банов не показываем отдельно
+	$any_banned = false;
 	foreach($jails as $j) {
 		$ips = preg_split('/\s+/', trim((string)$j['banned_ips']), -1, PREG_SPLIT_NO_EMPTY);
-		echo '<a name="jail_'.$h($j['jail']).'"></a><p class="fieldset-legend" style="margin-top:18px;">'.$h(_f2L('jail_txt')).': '.$h($j['jail']).' ('.count($ips).')</p>';
-		if(empty($ips)) { echo '<div class="alert alert-success">'.$h(_f2L('none_banned_txt')).'</div>'; continue; }
+		if(empty($ips)) continue;
+		$any_banned = true;
+		echo '<a name="jail_'.$h($j['jail']).'"></a><h3 class="ss-legend" style="margin-top:18px;">'.$h(_f2L('jail_txt')).': '.$h($j['jail']).' ('.count($ips).')</h3>';
 		echo '<table class="table"><thead class="dark"><tr><th>IP</th><th style="width:120px;">'.$h(_f2L('action_txt')).'</th></tr></thead><tbody>';
 		foreach($ips as $bip) {
 			echo '<tr><td><code>'.$h($bip).'</code></td><td><a class="btn btn-default btn-xs ss-f2b-unban" href="#" data-jail="'.$h($j['jail']).'" data-ip="'.$h($bip).'">'.$h(_f2L('unban_txt')).'</a></td></tr>';
 		}
 		echo '</tbody></table>';
 	}
+	if(!$any_banned) echo '<div class="alert alert-success">'.$h(_f2L('none_banned_txt')).'</div>';
 }
 
 // ---- форма «забанить IP вручную» ----
-echo '<p class="fieldset-legend" style="margin-top:18px;">'.$h(_f2L('ban_manual_txt')).'</p>';
+echo '<h3 class="ss-legend" style="margin-top:18px;">'.$h(_f2L('ban_manual_txt')).'</h3>';
 echo '<div class="form-group" style="max-width:640px;">';
 echo '<input type="text" id="f2b_ip" class="form-control" placeholder="'.$h(_f2L('ban_ip_ph_txt')).'" style="display:inline-block;width:220px;"> ';
 echo '<select id="f2b_jail" class="form-control" style="display:inline-block;width:200px;">';

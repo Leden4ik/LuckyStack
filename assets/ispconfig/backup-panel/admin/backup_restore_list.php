@@ -103,7 +103,7 @@ echo ss_action_form('backup');
 // ===== НАСТРОЙКИ БЭКАПА + «Бэкап сейчас» =====
 $g = function($k,$d='') use ($st){ return isset($st[$k]) ? $st[$k] : $d; };
 $script_ok = ($g('script_present','n') === 'y');
-echo '<p class="fieldset-legend">'.$h(_bL('settings_txt')).'</p>';
+echo '<h3 class="ss-legend">'.$h(_bL('settings_txt')).'</h3>';
 if(!$script_ok) echo '<div class="alert alert-warning">'.$h(_bL('noscript_txt')).'</div>';
 // статус: таймер + последний снимок
 $tmr_on = ($g('timer_enabled','n') === 'y');
@@ -162,7 +162,7 @@ echo '<div class="alert alert-danger" style="margin-top:18px"><b>'.$h(_bL('warn_
 
 // последние задачи восстановления
 if(!empty($jobs)) {
-	echo '<p class="fieldset-legend">'.$h(_bL('jobs_txt')).'</p><table class="table"><thead class="dark"><tr><th>#</th><th>'.$h(_bL('col_snapshot_txt')).'</th><th>'.$h(_bL('col_components_txt')).'</th><th>'.$h(_bL('col_status_txt')).'</th><th>'.$h(_bL('col_when_txt')).'</th></tr></thead><tbody>';
+	echo '<h3 class="ss-legend">'.$h(_bL('jobs_txt')).'</h3><table class="table"><thead class="dark"><tr><th>#</th><th>'.$h(_bL('col_snapshot_txt')).'</th><th>'.$h(_bL('col_components_txt')).'</th><th>'.$h(_bL('col_status_txt')).'</th><th>'.$h(_bL('col_when_txt')).'</th></tr></thead><tbody>';
 	foreach($jobs as $j) {
 		$st = $j['status'];
 		$cls = ($st === 'done') ? 'text-success' : (($st === 'error') ? 'text-danger' : (($st === 'running') ? 'text-warning' : ''));
@@ -176,7 +176,7 @@ if(empty($snaps)) {
 	return;
 }
 
-echo '<p class="fieldset-legend" style="margin-top:18px;">'.$h(_bL('snaps_txt')).'</p>';
+echo '<h3 class="ss-legend" style="margin-top:18px;">'.$h(_bL('snaps_txt')).'</h3>';
 echo '<table class="table"><thead class="dark"><tr><th>'.$h(_bL('col_snapshot_txt')).'</th><th>'.$h(_bL('col_size_txt')).'</th><th>'.$h(_bL('col_components_txt')).'</th><th style="width:46%;">'.$h(_bL('col_restore_txt')).'</th></tr></thead><tbody>';
 foreach($snaps as $i => $s) {
 	$present = array_filter(array_map('trim', explode(',', (string)$s['components'])));

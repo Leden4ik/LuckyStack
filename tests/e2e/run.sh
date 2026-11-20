@@ -4,6 +4,7 @@
 # работает, гоняют бэкап с восстановлением и уведомления, а в конце убирают за собой.
 #
 #   bash tests/e2e/run.sh [набор ...]      наборы: hosting restore notify health (по умолчанию все)
+#   E2E_KEEP=1 bash tests/e2e/run.sh hosting   оставить демо-клиента (для скриншотов), убрать: run.sh cleanup
 #   tools/e2e.sh root@хост [порт] [набор ...]   то же с рабочей машины
 #
 # Тесты создают и удаляют данные, поэтому работают только там, где есть файл
@@ -37,13 +38,17 @@ trap 'e2e_cleanup; exit 130' INT TERM
 
 echo "Сервер ${FQDN} (${SERVER_IP}), панель :${PANEL_PORT}, $(luckyctl version 2>/dev/null | grep -m1 -oE 'LuckyStack [0-9.]+')"
 for s in "${want[@]}"; do
+	[[ "$s" == cleanup ]] && { e2e_cleanup; continue; }
 	[[ -n "${file[$s]:-}" ]] || { echo "Нет набора «${s}». Есть: ${!file[*]}"; continue; }
 	echo; echo "== ${s}"
 	# shellcheck disable=SC1090
 	. "$E2E_DIR/${file[$s]}"
 done
 # уборка нужна, только если заводили клиента
-[[ " ${want[*]} " == *" hosting "* ]] && e2e_cleanup
+if [[ " ${want[*]} " == *" hosting "* ]]; then
+	if [[ "${E2E_KEEP:-0}" == 1 ]]; then echo; echo "Демо-клиент оставлен (E2E_KEEP=1). Убрать: run.sh cleanup"
+	else e2e_cleanup; fi
+fi
 
 echo
 echo "Итог: OK ${E2E_OK}, FAIL ${E2E_FAIL}"

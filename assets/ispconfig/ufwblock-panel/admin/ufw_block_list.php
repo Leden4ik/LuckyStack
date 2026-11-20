@@ -119,7 +119,7 @@ echo '<script type="text/javascript">jQuery(function($){'
 // --- подсказки: подсети-кластеры из CrowdSec ---
 $sug = $app->db->queryAllRecords("SELECT subnet, ip_count, sample, updated FROM ufw_block_suggest ORDER BY ip_count DESC");
 if(is_array($sug) && !empty($sug)) {
-	echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_ubL('suggest_head_txt')).'</p>';
+	echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_ubL('suggest_head_txt')).'</h3>';
 	echo '<p class="help-block">'.$h(_ubL('suggest_desc_txt')).'</p>';
 	echo '<table class="table"><thead class="dark"><tr><th>'.$h(_ubL('subnet_txt')).'</th><th style="width:90px;">'.$h(_ubL('ipcount_txt')).'</th><th>'.$h(_ubL('sample_txt')).'</th><th style="width:130px;">'.$h(_ubL('action_txt')).'</th></tr></thead><tbody>';
 	foreach($sug as $s) {
@@ -136,7 +136,7 @@ if(!is_array($rows)) $rows = array();
 // есть строки, ожидающие применения в ufw? (active=y, applied=n) → авто-обновление до «применено ✓»
 $pending = false;
 foreach($rows as $r) if($r['active'] === 'y' && $r['applied'] !== 'y') { $pending = true; break; }
-echo '<p class="fieldset-legend" style="margin-top:16px;">'.$h(_ubL('blocklist_head_txt')).'</p>';
+echo '<h3 class="ss-legend" style="margin-top:16px;">'.$h(_ubL('blocklist_head_txt')).'</h3>';
 if(empty($rows)) {
 	echo '<div class="alert alert-info">'.$h(_ubL('no_blocks_txt')).'</div>';
 } else {
