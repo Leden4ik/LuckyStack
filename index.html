@@ -104,10 +104,12 @@ header.top {
 .lead strong { color: var(--fg); font-weight: 500; }
 .install { margin-top: 26px; }
 .cmd { margin-top: 10px; display: flex; align-items: stretch; border-radius: 12px; overflow: hidden; background: var(--term); border: 1px solid var(--line); }
-.cmd pre { margin: 0; padding: 13px 16px; overflow-x: auto; flex: 1; min-width: 0; color: var(--term-fg); font: 400 .86rem/1.5 var(--mono); }
+.cmd pre { margin: 0; padding: 13px 16px; flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; color: var(--term-fg); font: 400 .86rem/1.5 var(--mono); }
 .cmd pre .p { color: var(--accent); user-select: none; }
-.copy { flex: none; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--term-fg); font: 600 .74rem/1 var(--mono); letter-spacing: .06em; padding: 0 15px; cursor: pointer; }
+.copy { flex: none; display: inline-flex; align-items: center; gap: 7px; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--term-fg); font: 600 .74rem/1 var(--mono); letter-spacing: .06em; padding: 0 15px; cursor: pointer; }
 .copy:hover { background: rgba(255, 255, 255, .06); }
+.copy.ok { color: #6fdc9a; }
+@media (max-width: 640px) { .copy .lbl { display: none; } .copy { padding: 0 14px; } .cmd pre { font-size: .8rem; padding: 12px 14px; } }
 .install .note { font-size: .9rem; color: var(--muted); margin-top: 10px; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
 .btn { display: inline-flex; align-items: center; gap: 8px; font: 600 .95rem/1 var(--body); text-decoration: none; border-radius: 10px; padding: 12px 18px; border: 1px solid var(--line); color: var(--fg); background: var(--panel); }
@@ -202,8 +204,8 @@ dialog.viewer button { position: fixed; top: 14px; right: 18px; font: 600 .8rem/
       <div class="install">
         <span class="label">Установка, от root</span>
         <div class="cmd">
-          <pre id="cmd-install">curl -fsSL https://raw.githubusercontent.com/Leden4ik/LuckyStack/main/get.sh | sudo bash</pre>
-          <button class="copy" type="button" data-copy="cmd-install">Копировать</button>
+          <pre id="cmd-install">curl -fsSL https://raw.githubusercontent.com/<wbr>Leden4ik/<wbr>LuckyStack/<wbr>main/<wbr>get.sh | sudo bash</pre>
+          <button class="copy" type="button" data-copy="cmd-install" aria-label="Скопировать команду"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg><span class="lbl">Копировать</span></button>
         </div>
         <p class="note">Команда скачивает последний выпуск, проверяет его подпись и запускает мастер. Если подпись не сходится, ничего не ставится. Нужен чистый Debian 12 или 13, Ubuntu 22.04 или новее, от 2 ГБ памяти.</p>
       </div>
@@ -343,8 +345,9 @@ dialog.viewer button { position: fixed; top: 14px; right: 18px; font: 600 .8rem/
   document.querySelectorAll('.copy').forEach(function (b) {
     b.addEventListener('click', function () {
       var el = document.getElementById(b.getAttribute('data-copy'));
-      var done = function () { b.textContent = 'Скопировано'; setTimeout(function () { b.textContent = 'Копировать'; }, 1600); };
-      var select = function () { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = 'Выделено'; };
+      var lbl = b.querySelector('.lbl');
+      var done = function () { lbl.textContent = 'Скопировано'; b.classList.add('ok'); setTimeout(function () { lbl.textContent = 'Копировать'; b.classList.remove('ok'); }, 1600); };
+      var select = function () { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); lbl.textContent = 'Выделено'; };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.textContent).then(done, select); else select();
     });
   });
