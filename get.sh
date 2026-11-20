@@ -24,9 +24,10 @@ done
 
 ver="${LUCKYSTACK_VERSION:-}"
 if [[ -z "$ver" ]]; then
-	ver="$(curl -fsSL --max-time 30 "${API}/repos/${REPO}/releases/latest" \
-		| grep -m1 -oE '"tag_name"[[:space:]]*:[[:space:]]*"v[0-9.]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" \
-		|| die "не удалось узнать последний выпуск на GitHub"
+	# ответ сначала целиком в переменную: curl | grep -m1 под pipefail падает, когда grep
+	# выходит раньше, чем curl дописал ответ (SIGPIPE)
+	json="$(curl -fsSL --max-time 30 "${API}/repos/${REPO}/releases/latest")" || die "не удалось узнать последний выпуск на GitHub"
+	ver="$(grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"v[0-9.]+"' <<<"$json" | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
 fi
 [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "непонятная версия: ${ver}"
 name="luckystack-${ver}.tar.gz"
