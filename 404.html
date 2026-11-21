@@ -42,6 +42,7 @@ p { color: var(--muted); margin: 14px 0 0; }
 .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
 a.btn { display: inline-flex; align-items: center; font: 600 .95rem/1 "Golos Text", system-ui, sans-serif; text-decoration: none; border-radius: 10px; padding: 12px 18px; border: 1px solid var(--line); color: var(--fg); background: var(--panel); }
 a.btn.main { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+main > p a { color: var(--cool); text-underline-offset: 3px; }
 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 </style>
 </head>
@@ -59,6 +60,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     <a class="btn main" href="/">На главную</a>
     <a class="btn" href="/docs.html">Документация</a>
   </div>
+  <p lang="en">Page not found. <a href="/en/">English version</a></p>
 </main>
 </body>
 </html>

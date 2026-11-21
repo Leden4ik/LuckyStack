@@ -9,6 +9,9 @@
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="canonical" href="https://luckystack.luckyman.name/">
+<link rel="alternate" hreflang="ru" href="https://luckystack.luckyman.name/">
+<link rel="alternate" hreflang="en" href="https://luckystack.luckyman.name/en/">
+<link rel="alternate" hreflang="x-default" href="https://luckystack.luckyman.name/">
 <meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
 <meta property="og:type" content="website">
@@ -211,6 +214,7 @@ dialog.viewer button { position: fixed; top: 14px; right: 18px; font: 600 .8rem/
   <nav class="top-right">
     <a class="pill" href="docs.html">Документация</a>
     <a class="pill gh" href="https://github.com/Leden4ik/LuckyStack">GitHub</a>
+    <a class="pill lang" href="en/" hreflang="en" lang="en" title="English version">EN</a>
     <button class="switch tbtn" id="theme" type="button" aria-label="Включить другую тему"><svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg><svg class="i-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5 8.6 8.6 0 1 0 20.5 14.6Z"/></svg></button>
   </nav>
 </header>
@@ -337,6 +341,9 @@ dialog.viewer button { position: fixed; top: 14px; right: 18px; font: 600 .8rem/
 <script>
 (function () {
   var root = document.documentElement;
+  document.querySelectorAll('a.lang').forEach(function (a) {
+    a.addEventListener('click', function (e) { if (location.hash) { e.preventDefault(); location.href = a.href.split('#')[0] + location.hash; } });
+  });
   function themeLabel() {
     var b = document.getElementById('theme'), l = (root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')) === 'light';
     b.setAttribute('aria-label', l ? 'Включить тёмную тему' : 'Включить светлую тему'); b.title = l ? 'Тёмная тема' : 'Светлая тема';
