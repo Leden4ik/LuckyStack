@@ -36,6 +36,7 @@ luckyctl $(version_of "$SS"), команда LuckyStack
   check                    проверка здоровья: службы, порты, сертификаты, бэкапы
   cve                      вышли ли исправления безопасности для nginx, OpenSSL и PHP
   blacklist                репутация почты: PTR, чёрные списки IP, домены в Spamhaus DBL
+  sites                    как отвечают все сайты и панель, что изменилось с прошлой проверки
   changes [N|ПУТЬ]          какие файлы менял каждый шаг установщика (последние N шагов или один файл)
   log [N]                  последние N строк журнала (по умолчанию 50)
   paths                    где лежат код, настройки, состояние и журнал
@@ -75,7 +76,13 @@ help_for() {
 		           echo "Без пунктов спрашивает, что обновлять. С пунктами работает без вопросов, например:"
 		           echo "  luckyctl update pkgs security"
 		           echo "  luckyctl update nginx ispconfig    (ядро; перед ним стоит сделать luckyctl backup)"
-		           echo "Пункты: ${UPDATE_ITEM_LIST}" ;;
+		           echo "Пункты: ${UPDATE_ITEM_LIST}"
+		           echo "До обновления запоминает, как отвечают сайты и панель, после сравнивает и пишет, что сломалось."
+		           echo "Без этой проверки: UPDATE_SITECHECK=n luckyctl update" ;;
+		sites)     echo "luckyctl sites   как отвечают все сайты ISPConfig (https и http), панель, Roundcube и phpMyAdmin"
+		           echo "Запросы идут на 127.0.0.1 по имени сайта, DNS не участвует. В конце показывает, что изменилось"
+		           echo "с прошлой проверки, поэтому удобно запускать до и после ручных правок. Код выхода 1, если"
+		           echo "какой-то адрес не отвечает или отдаёт 5xx." ;;
 		rollback)  echo "luckyctl rollback nginx       прошлая сборка nginx, сначала проверяет ваш конфиг"
 		           echo "luckyctl rollback roundcube   прошлая версия вебмейла вместе со схемой базы"
 		           echo "luckyctl rollback luckystack  прошлый выпуск самого LuckyStack"
@@ -114,6 +121,7 @@ case "$cmd" in
 	check)        run_ss --healthcheck "$@" ;;
 	cve)          run_ss --cve "$@" ;;
 	blacklist)    run_ss --blacklist "$@" ;;
+	sites)        need_root "$cmd"; run_ss --sites "$@" ;;
 	changes)      need_root "$cmd"; run_ss --changes "$@" ;;
 	diagnostics)  need_root "$cmd"; run_ss --diagnostics "$@" ;;
 	restore)      need_root "$cmd"; run_ss --restore "$@" ;;

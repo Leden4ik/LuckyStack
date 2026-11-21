@@ -32,6 +32,7 @@ ls_hint() {
 		--healthcheck)  echo "luckyctl check" ;;
 		--cve)          echo "luckyctl cve" ;;
 		--blacklist)    echo "luckyctl blacklist" ;;
+		--sites)        echo "luckyctl sites" ;;
 		--changes)      echo "luckyctl changes" ;;
 		--status)       echo "luckyctl status" ;;
 		--diagnostics)  echo "luckyctl diagnostics" ;;

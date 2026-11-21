@@ -164,6 +164,14 @@ run_update_mode() {
 		sel=" pkgs security confcustom tuning mail certs rcplugins backup notify "
 	fi
 
+	# 0) Как отвечают сайты и панель до обновления; в конце сравним (UPDATE_SITECHECK=n — без этого)
+	local _sc_before="" _nginx_rebuilt=0
+	if [[ "${UPDATE_SITECHECK:-y}" != "n" ]] && declare -F sc_before_update >/dev/null; then
+		echo ""
+		ui_step "Обновление: запоминаю, как отвечают сайты и панель"
+		_sc_before="$(sc_before_update)" || { _sc_before=""; ui_info "Проверять нечего: нет ни панели ISPConfig, ни сайтов."; }
+	fi
+
 	# 1) Системные пакеты
 	if [[ "$sel" == *" pkgs "* ]] && ui_confirm "Обновить системные пакеты (apt update && apt upgrade)?" y; then
 		declare -F ch_begin >/dev/null && ch_begin "обновление: системные пакеты (apt upgrade)"
@@ -197,6 +205,7 @@ run_update_mode() {
 		# UPDATE_ITEMS — запуск без вопросов, там ветка берётся из setup.conf
 		[[ -t 0 && -z "${UPDATE_ITEMS:-}" ]] && _nginx_ask_openssl_branch
 		_upd_run "Пересборка nginx (последняя версия)" stage_nginx
+		_nginx_rebuilt=1
 	fi
 	if [[ -f /usr/local/ispconfig/server/lib/config.inc.php ]] && declare -F _ispconfig_confcustom_refresh >/dev/null; then
 		_upd_run "conf-custom: сверка с шаблонами ISPConfig" _ispconfig_confcustom_refresh
@@ -418,6 +427,9 @@ run_update_mode() {
 	# (ядро — nginx и ISPConfig — обновляется в начале, шаг 1.5)
 	# Плагин firewall ISPConfig мог сработать по ходу обновления — ещё раз в самом конце
 	declare -F _ufw_ensure_enabled >/dev/null && ( _ufw_ensure_enabled )
+
+	# Сайты после обновления: что сломалось, попадает в UPD_FAILED (итог, журнал панели, уведомление)
+	[[ -n "$_sc_before" ]] && sc_after_update "$_sc_before" "$_nginx_rebuilt" "$_ispc_updated"
 
 	echo ""
 	if ((${#UPD_FAILED[@]})); then

@@ -75,6 +75,7 @@ SECREL_PLAIN=0     # --plain: строки «уровень|текст» для 
 DO_CHANGES=0       # журнал изменений файлов (и выйти)
 CHANGES_ARG=""     # для --changes: число шагов или путь к файлу
 DO_MAILREP=0       # репутация почты: PTR, чёрные списки, Spamhaus DBL (и выйти)
+DO_SITES=0         # как отвечают сайты и панель (и выйти)
 DO_DIAGNOSTICS=0   # собрать обезличенный архив диагностики для поддержки и выйти
 DO_RESTORE=0       # восстановление из резервной копии (интерактивно) и выйти
 DO_UPDATE=0        # режим обновления/патчей (безопасно, без ядра) и выйти
@@ -120,6 +121,7 @@ Flags:
   --cve           Check for security fixes (nginx, OpenSSL in nginx, PHP) and exit
   --changes [N|PATH]  Show which files each installer step changed (last N steps or one file)
   --blacklist     Check mail reputation: PTR, IP blacklists, Spamhaus DBL, and exit
+  --sites         Check how every ISPConfig site and the panel respond, and exit
   --diagnostics    Collect an anonymized diagnostics bundle for support and exit
   --restore        Restore data from a backup (interactive)
   --update         Update/patch mode: update packages + re-apply additive
@@ -166,6 +168,7 @@ LuckyStack v$VERSION, установщик сервера
   --cve           Проверить, вышли ли исправления безопасности (nginx, OpenSSL в nginx, PHP), и выйти
   --changes [N|ПУТЬ]  Какие файлы менял каждый шаг установщика (последние N шагов или один файл)
   --blacklist     Проверить репутацию почты: PTR, чёрные списки IP, домены в Spamhaus DBL, и выйти
+  --sites         Проверить, как отвечают все сайты ISPConfig и панель, и выйти
   --diagnostics    Собрать обезличенный архив диагностики для поддержки и выйти
   --restore        Восстановить данные из резервной копии (интерактивно)
   --update         Режим обновления/патчей: обновить пакеты + переприменить
@@ -205,6 +208,7 @@ while (($#)); do
 		--healthcheck) DO_HEALTHCHECK=1 ;;
 		--cve)         DO_SECREL=1 ;;
 		--blacklist)   DO_MAILREP=1 ;;
+		--sites)       DO_SITES=1 ;;
 		--changes)     DO_CHANGES=1; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then CHANGES_ARG="$2"; shift; fi ;;
 		--plain)       SECREL_PLAIN=1 ;;
 		--diagnostics) DO_DIAGNOSTICS=1 ;;
@@ -228,7 +232,7 @@ done
 # --- Валидация взаимоисключающих режимов/флагов ------------------------------
 # (до загрузки библиотек — поэтому обычный echo, а не ui_*)
 _modes=0
-for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_CHANGES" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
+for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_SITES" "$DO_CHANGES" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
 	(( _m )) && (( _modes++ ))
 done
 if (( _modes > 1 )); then
@@ -274,7 +278,7 @@ type i18n_load >/dev/null 2>&1 && i18n_load "${UI_LANG:-ru}"
 for _stage_lib in changes preflight database nginx apache webserver php nodejs dbtools monit \
                    mail rspamd dns ftp ssl security webmail ispconfig \
                    hostcert rcplugins maildeliver mailsni tuning backup malware notify \
-                   update secrel mailrep healthcheck uninstall; do
+                   sitecheck update secrel mailrep healthcheck uninstall; do
 	[[ -f "$LIB_DIR/${_stage_lib}.sh" ]] && . "$LIB_DIR/${_stage_lib}.sh"
 done
 
@@ -1638,6 +1642,13 @@ main() {
 			exit $?
 		fi
 		ui_error "lib/mailrep.sh не подключён."; exit 1
+	fi
+
+	# Как отвечают сайты и панель (нужен root: список сайтов из базы ISPConfig)
+	if ((DO_SITES)); then
+		require_root
+		if declare -F run_sitecheck >/dev/null; then run_sitecheck; exit $?; fi
+		ui_error "lib/sitecheck.sh не подключён."; exit 1
 	fi
 
 	# Журнал изменений файлов (нужен root: журнал закрыт для остальных)
