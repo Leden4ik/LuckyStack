@@ -1099,7 +1099,8 @@ _ispconfig_site_backups() {
 		mkdir -p "$bdir" 2>/dev/null
 		free="$(df -Pk "$bdir" 2>/dev/null | awk 'NR==2{print int($4/1048576)}')"
 		ui_info "Бэкапы ISPConfig выключены у ${n} из ${total} сайтов. Сайты занимают ~${www:-?} ГБ, свободно ${free:-?} ГБ; ${copies} копии в сжатом виде займут примерно до $(( ${www:-0} * copies )) ГБ."
-		if ! ui_confirm "Включить ежедневный бэкап ISPConfig для этих сайтов (${copies} копии, ${bdir})?" y; then
+		# по умолчанию «нет»: бэкапы занимают место, их включают осознанно, а не случайным Enter
+		if ! ui_confirm "Включить ежедневный бэкап ISPConfig для этих сайтов (${copies} копии, ${bdir})?" n; then
 			config_set ISPC_SITE_BACKUPS n; return 0
 		fi
 		config_set ISPC_SITE_BACKUPS y
