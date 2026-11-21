@@ -4,7 +4,7 @@
 возможностями. Обновиться: `luckyctl self-update`, вернуться назад:
 `luckyctl rollback luckystack`.
 
-## Не выпущено
+## 0.1.8 — 2026-11-21
 
 - `luckyctl update` проверяет сайты до и после обновления. Перед первым шагом он
   запоминает, как отвечают панель, Roundcube, phpMyAdmin и каждый сайт ISPConfig
