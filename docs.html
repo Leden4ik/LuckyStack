@@ -6,7 +6,24 @@
 <meta name="description" content="LuckyStack: установщик и сопровождение сервера хостинга на ISPConfig. nginx с HTTP/3, PHP нескольких версий, MariaDB, почта, защита и бэкапы.">
 <style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 
-<title>LuckyStack</title>
+<title>Документация LuckyStack</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="canonical" href="https://luckystack.luckyman.name/docs.html">
+<meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LuckyStack">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:url" content="https://luckystack.luckyman.name/docs.html">
+<meta property="og:title" content="Документация LuckyStack">
+<meta property="og:description" content="Установка, команда luckyctl, панель обслуживания, обновления и откат, безопасность, бэкапы и уведомления.">
+<meta property="og:image" content="https://luckystack.luckyman.name/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="LuckyStack и панель обслуживания сервера в ISPConfig">
+<meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +38,7 @@
   --ui-bg: #121a36; --ui-bar: #0c1330; --ui-head: #18224a; --ui-line: #2a3666; --ui-fg: #e3e8f7; --ui-muted: #98a3c6; --ui-btn: #2f6fd6;
   --display: "Manrope", "Segoe UI", system-ui, sans-serif;
   --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --mono: "LS Box", "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -57,6 +74,8 @@
   color-scheme: dark;
 }
 
+/* рамки, стрелки и галочки из полного JetBrains Mono: в шрифте с Google Fonts их нет, и рамки съезжали */
+@font-face { font-family: "LS Box"; src: url("fonts/jetbrains-mono-regular.woff2") format("woff2"); font-display: swap; unicode-range: U+2190-21FF, U+2500-25FF, U+2713, U+2717; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 body {
@@ -640,10 +659,10 @@ luckyctl install --from security   <span class="c"># начать с этапа 
 │   <span class="t-ok">✓</span> порт 443 (web) слушается                                                 │
 │   <span class="t-ok">✓</span> HTTP/3: nginx слушает UDP/443 (QUIC)                                     │
 │   <span class="t-ok">✓</span> HTTP/3: UDP/443 открыт в ufw                                             │
-│   <span class="t-ok">✓</span> чувствительные сервисы (БД/кэш) не торчат наружу (только localhost)     │
+│   <span class="t-ok">✓</span> чувствительные сервисы (БД/кэш) не торчат наружу (только localhost)      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ TLS-сертификаты ────────────────────────────────────────────────────────────┐
-│   <span class="t-ok">✓</span> панель ISPConfig: валиден (87 дн.) (Let's Encrypt)                      │
+│   <span class="t-ok">✓</span> панель ISPConfig: валиден (87 дн.) (Let's Encrypt)                       │
 │   <span class="t-ok">✓</span> LE server.example.com: валиден (87 дн.)                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ Исправления безопасности ───────────────────────────────────────────────────┐

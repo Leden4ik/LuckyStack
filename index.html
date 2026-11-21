@@ -5,6 +5,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="LuckyStack: веб- и почтовый сервер на nginx, PHP и ISPConfig одной командой. Обслуживание из панели, подписанные обновления, бэкапы и защита.">
 <title>LuckyStack</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="canonical" href="https://luckystack.luckyman.name/">
+<meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LuckyStack">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:url" content="https://luckystack.luckyman.name/">
+<meta property="og:title" content="LuckyStack">
+<meta property="og:description" content="Веб- и почтовый сервер на nginx, PHP и ISPConfig одной командой. Обслуживание из панели, подписанные обновления, бэкапы и защита.">
+<meta property="og:image" content="https://luckystack.luckyman.name/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="LuckyStack и панель обслуживания сервера в ISPConfig">
+<meta name="twitter:card" content="summary_large_image">
 <script>
 // старые ссылки на разделы документации (/#cli) ведут теперь на docs.html#cli
 (function () { var h = location.hash.slice(1); if (h && /^[a-z][a-z0-9-]*$/.test(h) && !document.getElementById(h) && ['intro','quickstart','requirements','wizard','stages','unattended','cli','panel','updates','rollback','security','backup','notify','config','files','trouble','faq','roadmap'].indexOf(h) >= 0) location.replace('docs.html#' + h); })();
@@ -22,7 +39,7 @@ try { var t = localStorage.getItem('ls-theme'); if (t === 'light' || t === 'dark
   --ui-bg: #121a36; --ui-bar: #0c1330; --ui-head: #18224a; --ui-line: #2a3666; --ui-fg: #e3e8f7; --ui-muted: #98a3c6; --ui-btn: #2f6fd6;
   --display: "Manrope", "Segoe UI", system-ui, sans-serif;
   --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --mono: "LS Box", "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -58,6 +75,8 @@ try { var t = localStorage.getItem('ls-theme'); if (t === 'light' || t === 'dark
   color-scheme: dark;
 }
 
+/* рамки, стрелки и галочки из полного JetBrains Mono: в шрифте с Google Fonts их нет, и рамки съезжали */
+@font-face { font-family: "LS Box"; src: url("fonts/jetbrains-mono-regular.woff2") format("woff2"); font-display: swap; unicode-range: U+2190-21FF, U+2500-25FF, U+2713, U+2717; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 body {
