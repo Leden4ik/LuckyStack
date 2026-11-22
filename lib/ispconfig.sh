@@ -491,11 +491,11 @@ stage_ispconfig() {
 	# ISPConfig 3.2 stable НЕ поддерживает самые свежие PHP (8.5 фаталит).
 	# Запускаем install.php совместимой версией, а не системным дефолтом.
 	local phpbin="" v
-	for v in 8.3 8.2 8.4 8.1 8.0 7.4 8.5; do
+	for v in 8.3 8.2 8.4 8.1 8.0 7.4 8.5 8.6; do
 		command -v "php${v}" >/dev/null 2>&1 && { phpbin="php${v}"; break; }
 	done
 	[[ -z "$phpbin" ]] && { apt_install php-cli php-mysql; phpbin="php"; }
-	[[ "$phpbin" == "php8.5" ]] && ui_warn "Доступен только PHP 8.5 — ISPConfig может быть несовместим."
+	[[ "$phpbin" == "php8.5" || "$phpbin" == "php8.6" ]] && ui_warn "Доступен только PHP ${phpbin#php} — ISPConfig может быть несовместим."
 	ui_info "Инсталлер ISPConfig запускается через: ${UI_BOLD}${phpbin}${UI_NC}"
 
 	local ilog=/tmp/ispconfig-install.log

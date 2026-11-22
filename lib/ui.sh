@@ -99,11 +99,44 @@ ui_box_top() {
 }
 ui_box_line() {
 	local text; text="$(t "$1")"; local inner=${UI_BOX_INNER:-$(($(ui_cols) - 2))}
-	local tlen pad
-	tlen=$(ui_vislen "$text")
-	pad=$((inner - tlen - 1))
+	# Длинную строку в терминале переносим по словам. Не в терминале (панель ISPConfig читает
+	# вывод построчно, монитор, файл) строка остаётся целой: перенос там разорвал бы пункт.
+	# UI_WRAP=1 — переносить всегда, 0 — никогда.
+	if (($(ui_vislen "$text") > inner - 1)) && [[ "${UI_WRAP:-auto}" == 1 || ( "${UI_WRAP:-auto}" == auto && -t 1 ) ]]; then
+		_ui_box_wrap "$text" "$inner"
+		return 0
+	fi
+	_ui_box_row "$text" "$inner"
+}
+
+_ui_box_row() {
+	local pad=$(($2 - $(ui_vislen "$1") - 1))
 	((pad < 0)) && pad=0
-	echo -e "${UI_C}│${UI_NC} ${text}$(ui_repeat ' ' "$pad")${UI_C}│${UI_NC}"
+	echo -e "${UI_C}│${UI_NC} ${1}$(ui_repeat ' ' "$pad")${UI_C}│${UI_NC}"
+}
+
+# Перенос по словам. Продолжение выравнивается по тексту после значка («  ! текст» →
+# продолжение с 4 пробелов), чтобы было видно, что это тот же пункт.
+_ui_box_wrap() {
+	local text="$1" inner="$2" width=$(($2 - 1)) plain lead ind w wl line llen started=0
+	local -a words
+	plain="$(printf '%s' "$text" | sed -E $'s/(\033|\\\\033|\\\\e)\\[[0-9;]*m//g')"
+	lead="${plain%%[! ]*}"
+	ind="$lead"
+	[[ "${plain:${#lead}:2}" =~ ^[^\ ]\ $ ]] && ind+="  "
+	read -ra words <<<"$text"
+	line="$lead"; llen=${#lead}
+	for w in "${words[@]}"; do
+		wl=$(ui_vislen "$w")
+		if ((started && llen + 1 + wl > width)); then
+			_ui_box_row "$line" "$inner"
+			line="$ind"; llen=${#ind}; started=0
+		fi
+		if ((started)); then line+=" $w"; llen=$((llen + 1 + wl))
+		else line+="$w"; llen=$((llen + wl)); started=1; fi
+	done
+	((started)) && _ui_box_row "$line" "$inner"
+	return 0
 }
 ui_box_bottom() {
 	local inner=${UI_BOX_INNER:-$(($(ui_cols) - 2))}

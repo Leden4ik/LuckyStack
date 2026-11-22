@@ -68,6 +68,7 @@ _install_phpmyadmin() {
 	# только ради CLI. Расширения gd/curl/zip/bz2 уже стоят у версий PHP из этапа PHP.
 	APT_NO_RECOMMENDS=1 apt_install phpmyadmin php-tcpdf
 	declare -F _php_drop_stray >/dev/null && _php_drop_stray
+	declare -F _php_pin_meta >/dev/null && _php_pin_meta
 	mkdir -p /var/www/html
 	ln -sfn /usr/share/phpmyadmin /var/www/html/phpmyadmin
 

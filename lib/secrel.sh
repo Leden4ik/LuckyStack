@@ -123,7 +123,7 @@ _secrel_nginx_report() {
 		return
 	fi
 	echo "warn|nginx ${v}: уязвимостей ${n} (серьёзных ${major}), исправлено в ${fix}: luckyctl update nginx"
-	[[ -n "$names" ]] && echo "info|серьёзные: ${names}"
+	[[ -n "$names" ]] && echo "note|серьёзные: ${names}"
 }
 
 _secrel_nginx() {
@@ -300,6 +300,7 @@ run_security_releases() {
 		case "$lvl" in
 			ok)   ui_box_line "  ${UI_G}✓${UI_NC} ${txt}" ;;
 			warn) ui_box_line "  ${UI_Y}!${UI_NC} ${txt}"; warn=$((warn + 1)) ;;
+			info) ui_box_line "  ${UI_C}i${UI_NC} ${txt}" ;;
 			*)    ui_box_line "    ${UI_D}${txt}${UI_NC}" ;;
 		esac
 	done < <(secrel_scan)

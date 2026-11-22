@@ -175,6 +175,8 @@ run_update_mode() {
 	# 1) Системные пакеты
 	if [[ "$sel" == *" pkgs "* ]] && ui_confirm "Обновить системные пакеты (apt update && apt upgrade)?" y; then
 		declare -F ch_begin >/dev/null && ch_begin "обновление: системные пакеты (apt upgrade)"
+		# метапакеты php-* не должны тянуть новую ветку PHP (см. _php_pin_meta)
+		declare -F _php_pin_meta >/dev/null && ( _php_pin_meta )
 		apt_update
 		sys_run "apt upgrade" apt-get -y -o Dpkg::Options::=--force-confold upgrade || \
 			ui_warn "apt upgrade завершился с замечаниями — см. ${SETUP_LOG}."
@@ -234,6 +236,7 @@ run_update_mode() {
 		declare -F _tz_php_sync >/dev/null && _upd_run "Часовой пояс PHP = пояс системы" _tz_php_sync
 		declare -F _php_security_ini >/dev/null && _upd_run "Безопасные настройки PHP (сессии, OPcache)" _php_security_ini
 		declare -F _php_drop_stray >/dev/null && _upd_run "Убрать лишнюю версию PHP, притянутую зависимостями" _php_drop_stray
+		declare -F _php_pin_meta >/dev/null && _upd_run "Метапакеты PHP: закрепить на своей ветке" _php_pin_meta
 		declare -F _rcu_update_mode >/dev/null && _upd_run "Roundcube: версия разработчиков (обновление / переезд с пакета Debian)" _rcu_update_mode
 		declare -F _rcu_fix_smtp >/dev/null && _upd_run "Roundcube: отправка писем через STARTTLS (587)" _rcu_fix_smtp
 		declare -F _rc_fix_plugin_perms >/dev/null && _upd_run "Roundcube: плагины ISPConfig (права конфигов, адрес API)" _rc_fix_plugin_perms
@@ -439,8 +442,20 @@ run_update_mode() {
 		ui_success "Обновление/патчи применены."
 	fi
 	ui_info "Проверка: ${UI_W}$(ls_hint --healthcheck)${UI_NC}"
+	_upd_panel_refresh
 	log "update-mode: завершён"
 	return 0
+}
+
+# Панель «Обслуживание сервера» сама пересчитывает версии раз в 10 минут, а проверку сервера
+# раз в 6 часов. После обновления из консоли просим её сделать и то и другое на ближайшем
+# проходе cron (раз в минуту), иначе там до вечера висят старые строки.
+_upd_panel_refresh() {
+	[[ "${DRY_RUN:-0}" == "1" ]] && return 0
+	[[ -f /usr/local/ispconfig/server/scripts/ss-maint-sync.php ]] || return 0
+	declare -F _ispc_mysql >/dev/null || return 0
+	_ispc_mysql -e "UPDATE ss_maint_setting SET updated = NOW() - INTERVAL 1 DAY WHERE name IN ('versions','health')" >/dev/null 2>&1 || return 0
+	ui_info "Панель «Обслуживание сервера» обновит сведения и проверку в ближайшие минуты."
 }
 
 # Обновление ISPConfig штатным механизмом (https://www.faqforge.com/.../how-to-update-ispconfig-3/).

@@ -17,6 +17,7 @@ HC_OK=0; HC_WARN=0; HC_FAIL=0
 _hc_ok()   { ui_box_line "  ${UI_G}✓${UI_NC} $1"; ((HC_OK++));   }
 _hc_warn() { ui_box_line "  ${UI_Y}!${UI_NC} $1"; ((HC_WARN++)); }
 _hc_fail() { ui_box_line "  ${UI_R}✗${UI_NC} $1"; ((HC_FAIL++)); }
+_hc_info() { ui_box_line "  ${UI_C}i${UI_NC} $1"; }   # к сведению, в итог не входит
 
 # Порт слушается (TCP или UDP, любой адрес)?
 _hc_listen() {
@@ -150,6 +151,8 @@ _hc_security_backups() {
 				_hc_ok "бэкапы ISPConfig включены у всех сайтов (${total})"
 			elif [[ "${www:-n}" == "y" ]]; then
 				_hc_ok "сайты входят в серверный бэкап (/var/www)"
+			elif [[ "${ISPC_SITE_BACKUPS:-}" == "n" ]]; then
+				_hc_info "бэкапы сайтов в ISPConfig выключены по вашему выбору (ISPC_SITE_BACKUPS=n), без бэкапа ${off} из ${total}"
 			else
 				_hc_warn "у ${off} из ${total} сайтов нет бэкапа — $(ls_hint --update) предложит включить"
 			fi
@@ -400,6 +403,7 @@ run_healthcheck() {
 			case "$_lvl" in
 				ok)   _hc_ok "$_txt" ;;
 				warn) _hc_warn "$_txt" ;;
+				info) _hc_info "$_txt" ;;
 				*)    ui_box_line "    ${UI_D}${_txt}${UI_NC}" ;;
 			esac
 		done < <(secrel_scan)
@@ -413,6 +417,7 @@ run_healthcheck() {
 			case "$_lvl" in
 				ok)   _hc_ok "$_txt" ;;
 				warn) _hc_warn "$_txt" ;;
+				info) _hc_info "$_txt" ;;
 				*)    ui_box_line "    ${UI_D}${_txt}${UI_NC}" ;;
 			esac
 		done < <(mailrep_scan)

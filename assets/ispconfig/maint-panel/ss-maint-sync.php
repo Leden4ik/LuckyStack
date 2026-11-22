@@ -92,7 +92,7 @@ $MODULE_USE = array(
 
 // Сроки поддержки, проверено 2026-11-06 (php.net, openssl-library.org).
 $PHP_EOL_DATES = array('5.6'=>'2018-12-31','7.0'=>'2019-01-10','7.1'=>'2019-12-01','7.2'=>'2020-11-30','7.3'=>'2021-12-06','7.4'=>'2022-11-28',
-	'8.0'=>'2023-11-26','8.1'=>'2025-12-31','8.2'=>'2026-12-31','8.3'=>'2027-12-31','8.4'=>'2028-12-31','8.5'=>'2029-12-31');
+	'8.0'=>'2023-11-26','8.1'=>'2025-12-31','8.2'=>'2026-12-31','8.3'=>'2027-12-31','8.4'=>'2028-12-31','8.5'=>'2029-12-31','8.6'=>'2030-12-31');
 $OPENSSL_EOL_DATES = array('3.5'=>'2030-04-08','4.0'=>'2027-05-14','4.1'=>'2027-11-23');
 
 function mm_set($k, $v) { global $app; $app->db->query("REPLACE INTO ss_maint_setting (name, value, updated) VALUES (?,?,NOW())", $k, (string)$v); }
@@ -200,6 +200,31 @@ function mm_installer_running() {
 	return mm_sh("pgrep -f '^(/usr)?(/bin/)?bash [^ ]*server-setup\\.sh'") !== '';
 }
 
+// Последний перенос исправлений безопасности в пакет PHP ветки (журнал изменений пакета Sury):
+// array('дд.мм.гггг', число CVE, дней назад) или null. Тот же разбор, что у luckyctl cve.
+function mm_php_backport($ver) {
+	if(!function_exists('gzopen') || !preg_match('/^[0-9]+\.[0-9]+$/', $ver)) return null;
+	foreach(array('common', 'fpm') as $p) {
+		$f = '/usr/share/doc/php'.$ver.'-'.$p.'/changelog.Debian.gz';
+		if(!is_readable($f) || !($z = @gzopen($f, 'r'))) continue;
+		$n = 0;
+		while(($l = gzgets($z, 8192)) !== false) {
+			if(strpos($l, ' -- ') === 0) {
+				if($n > 0 && preg_match('/>\s+(.+)$/', rtrim($l), $m) && ($ts = strtotime($m[1]))) {
+					gzclose($z);
+					return array(date('d.m.Y', $ts), $n, (int)floor((time() - $ts) / 86400));
+				}
+				$n = 0;
+				continue;
+			}
+			$n += preg_match_all('/CVE-[0-9]+-[0-9]+/', $l);
+		}
+		gzclose($z);
+		return null;
+	}
+	return null;
+}
+
 // --- Сведения о сервере ------------------------------------------------------
 function mm_collect() {
 	global $app, $SETTINGS, $MODULE_USE, $PHP_EOL_DATES, $OPENSSL_EOL_DATES, $PIDFILE;
@@ -286,7 +311,12 @@ function mm_collect() {
 		$list = implode(', ', array_slice($sites, 0, 5)).(count($sites) > 5 ? ' и ещё '.(count($sites) - 5) : '');
 		if(!isset($PHP_EOL_DATES[$ver])) { $add('warn', 'PHP '.$ver.': срок поддержки неизвестен ('.$list.')'); continue; }
 		$d = $due($PHP_EOL_DATES[$ver]);
-		if($d < 0) $add('fail', 'PHP '.$ver.' без исправлений безопасности с '.$PHP_EOL_DATES[$ver].': '.$list);
+		if($d < 0) {
+			// php.net ветку не поддерживает, но репозиторий Sury переносит в неё исправления из новых версий
+			$bp = mm_php_backport($ver);
+			if($bp && $bp[2] <= 180) $add('warn', 'PHP '.$ver.': поддержка закончилась на php.net ('.$PHP_EOL_DATES[$ver].'), исправления безопасности переносит репозиторий пакетов, последний раз '.$bp[0].' (уязвимостей: '.$bp[1].'). Переход на новую версию стоит планировать: '.$list);
+			else $add('fail', 'PHP '.$ver.' без исправлений безопасности с '.($bp ? $bp[0] : $PHP_EOL_DATES[$ver]).': '.$list);
+		}
 		elseif($d < 90) $add('warn', 'PHP '.$ver.': поддержка заканчивается '.$PHP_EOL_DATES[$ver].' (осталось '.$d.' дн.): '.$list);
 		else $add('ok', 'PHP '.$ver.' поддерживается до '.$PHP_EOL_DATES[$ver].' (сайтов: '.count($sites).')');
 	}
@@ -375,9 +405,9 @@ function mm_healthcheck() {
 	$groups = array(); $g = ''; $counts = array('ok' => 0, 'warn' => 0, 'fail' => 0);
 	foreach(explode("\n", mm_clean(implode("\n", $o))) as $l) {
 		if(preg_match('/^┌─\s*(.+?)\s*─+/u', $l, $m)) { $g = $m[1]; continue; }
-		if(preg_match('/^│\s+(✓|!|✗)\s+(.*?)\s*│?\s*$/u', $l, $m)) {
-			$lvl = ($m[1] === '✓') ? 'ok' : (($m[1] === '!') ? 'warn' : 'fail');
-			$counts[$lvl]++;
+		if(preg_match('/^│\s+(✓|!|✗|i)\s+(.*?)\s*│?\s*$/u', $l, $m)) {
+			$lvl = ($m[1] === '✓') ? 'ok' : (($m[1] === '!') ? 'warn' : (($m[1] === 'i') ? 'info' : 'fail'));
+			if($lvl !== 'info') $counts[$lvl]++;   // «i» — к сведению, в итог не входит
 			$groups[$g][] = array($lvl, $m[2]);
 			continue;
 		}

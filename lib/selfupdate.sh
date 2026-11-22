@@ -176,6 +176,7 @@ run_self_update() {
 	_ls_refresh_maint_sync
 	ls_update_maint_conf
 	ui_success "LuckyStack обновлён до версии ${got}: ${rel}"
+	declare -F _upd_panel_refresh >/dev/null && _upd_panel_refresh
 	ui_info "Вернуть прошлый выпуск: luckyctl rollback luckystack"
 	ui_info "Настройки сервера этим не меняются. Применить то, что изменилось в новой версии: luckyctl update"
 	return 0

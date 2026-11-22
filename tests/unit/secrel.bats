@@ -51,7 +51,7 @@ setup() {
 @test "отчёт по уязвимому nginx 1.30.6" {
 	run _secrel_nginx_report 1.30.6 "$ADV"
 	[ "${lines[0]}" = "warn|nginx 1.30.6: уязвимостей 2 (серьёзных 1), исправлено в 1.30.7: luckyctl update nginx" ]
-	[[ "${lines[1]}" == "info|серьёзные: Memory corruption in HTTP/2 flow control (CVE-2026-123007)" ]]
+	[[ "${lines[1]}" == "note|серьёзные: Memory corruption in HTTP/2 flow control (CVE-2026-123007)" ]]
 }
 
 @test "отчёт по исправленному nginx 1.30.7" {

@@ -150,6 +150,35 @@ _php_install_version() {
 	sys_run "Автозагрузка php${v}-fpm" systemctl enable "php${v}-fpm"
 }
 
+# Безверсионные метапакеты php-* (php-mysql ставит phpMyAdmin из Debian) зависят от ветки PHP «по
+# умолчанию» в репозитории Sury. Когда там появляется новая ветка, apt full-upgrade поставил бы её
+# целиком: php-mysql 2:8.6 → php8.6-mysql → PHP 8.6. Удалить метапакет нельзя, вместе с ним уйдёт
+# phpMyAdmin. Поэтому закрепляем каждый такой метапакет на ветке, на которую он указывает сейчас.
+# Новая ветка PHP ставится только явно: luckyctl add-php. Файл пересобирается при каждом update.
+PHP_META_PIN="${PHP_META_PIN:-/etc/apt/preferences.d/luckystack-php-meta}"
+_php_pin_meta() {
+	[[ "${DRY_RUN:-0}" == "1" ]] && return 0
+	local p v br dep body="" n=0 new
+	while read -r p v; do
+		dep="$(dpkg-query -W -f='${Depends}' "$p" 2>/dev/null)"
+		[[ "$dep" =~ php([0-9]+\.[0-9]+)- ]] || continue
+		br="${BASH_REMATCH[1]}"
+		# версия метапакета вида 2:8.4+101+debsuryorg... → закрепляем «2:8.4+*»
+		[[ "$v" == *:"${br}"+* ]] || continue
+		body+=$'\n'"Package: ${p}"$'\n'"Pin: version ${v%%:*}:${br}+*"$'\n'"Pin-Priority: 1001"$'\n'
+		n=$((n + 1))
+	done < <(dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\n' 'php-*' 2>/dev/null | awk '$3 == "installed" {print $1, $2}')
+	if ((n == 0)); then
+		[[ -f "$PHP_META_PIN" ]] && rm -f "$PHP_META_PIN"
+		return 0
+	fi
+	new="# LuckyStack: метапакеты php-* закреплены на своей ветке PHP, новая ветка ставится только через luckyctl add-php${body}"
+	[[ -f "$PHP_META_PIN" && "$(cat "$PHP_META_PIN")" == "$(printf '%s\n' "$new")" ]] && return 0
+	printf '%s\n' "$new" >"$PHP_META_PIN" || return 1
+	ui_success "Метапакеты PHP закреплены на своей ветке (${n}): новая ветка PHP не придёт с apt full-upgrade."
+	log "php: закреплены метапакеты в ${PHP_META_PIN}"
+}
+
 # Удалить лишнюю версию PHP, которую притянули зависимости. Так приходит PHP 8.5: пакет phpmyadmin
 # рекомендует php-mcrypt, а он из репозитория sury тянет самую новую версию PHP (CLI-пакеты).
 # Удаляем версию, только если: её нет в PHP_VERSIONS, для неё нет PHP-FPM (сайтов на ней быть не
@@ -381,7 +410,7 @@ run_php_add() {
 	apt-get update -qq >>"$SETUP_LOG" 2>&1 || true
 
 	local v cand=() args=() have=""
-	for v in 8.5 8.4 8.3 8.2 8.1 8.0 7.4; do
+	for v in 8.6 8.5 8.4 8.3 8.2 8.1 8.0 7.4; do
 		if dpkg -l "php${v}-fpm" 2>/dev/null | grep -q '^ii'; then have+=" $v"; continue; fi
 		_php_pkg_available "php${v}-fpm" || continue
 		cand+=("$v")

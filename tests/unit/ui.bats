@@ -27,3 +27,20 @@ setup() {
 	plain="$(printf '%s' "$out" | sed 's/\x1b\[[0-9;]*m//g')"
 	[ "$(printf '%s' "$plain" | wc -m)" = "42" ]
 }
+
+@test "длинная строка рамки переносится по словам, продолжение под текстом пункта" {
+	long='  \033[1;33m!\033[0m раз два три четыре пять шесть семь восемь девять десять одиннадцать'
+	out="$(UI_WRAP=1 UI_BOX_INNER=30 ui_box_line "$long")"
+	plain="$(printf '%s\n' "$out" | sed 's/\x1b\[[0-9;]*m//g')"
+	[ "$(wc -l <<<"$plain")" -ge 3 ]
+	# все строки одной ширины, рамка ровная
+	while IFS= read -r l; do [ "$(printf '%s' "$l" | wc -m)" = "32" ]; done <<<"$plain"
+	[[ "$(sed -n 1p <<<"$plain")" == "│   ! раз два"* ]]
+	[[ "$(sed -n 2p <<<"$plain")" == "│     "[![:space:]]* ]]
+}
+
+@test "без терминала длинная строка не переносится (её читает панель)" {
+	long="  ! $(printf 'слово%.0s ' {1..20})"
+	out="$(UI_WRAP=auto UI_BOX_INNER=30 ui_box_line "$long" | cat)"
+	[ "$(wc -l <<<"$out")" -eq 1 ]
+}

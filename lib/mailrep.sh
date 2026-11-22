@@ -114,7 +114,7 @@ mailrep_scan() {
 		echo "warn|IP ${ip} в списке ${list}: $(_mailrep_code "$list" "$code")"
 	done
 	((bad)) || echo "ok|IP ${ip} не в чёрных списках ($(wc -w <<<"$MAILREP_IP_LISTS") проверено)"
-	[[ "$MAILREP_IP_LISTS" == *zen.spamhaus.org* ]] && ((bad)) && echo "info|проверить и снять из Spamhaus: https://check.spamhaus.org/"
+	[[ "$MAILREP_IP_LISTS" == *zen.spamhaus.org* ]] && ((bad)) && echo "note|проверить и снять из Spamhaus: https://check.spamhaus.org/"
 
 	bad=0
 	while read -r d; do
@@ -128,7 +128,7 @@ mailrep_scan() {
 	done < <(_mailrep_domains "$fqdn")
 	if ((bad)); then
 		((n > bad)) && echo "ok|остальные почтовые домены не в Spamhaus DBL ($((n - bad)))"
-		echo "info|заявка на снятие домена: https://check.spamhaus.org/ (сначала убедитесь, что спам с него больше не идёт)"
+		echo "note|заявка на снятие домена: https://check.spamhaus.org/ (сначала убедитесь, что спам с него больше не идёт)"
 	elif ((n)); then
 		echo "ok|почтовые домены не в Spamhaus DBL (${n})"
 	fi
@@ -146,6 +146,7 @@ run_mail_reputation() {
 		case "$lvl" in
 			ok)   ui_box_line "  ${UI_G}✓${UI_NC} ${txt}" ;;
 			warn) ui_box_line "  ${UI_Y}!${UI_NC} ${txt}"; warn=$((warn + 1)) ;;
+			info) ui_box_line "  ${UI_C}i${UI_NC} ${txt}" ;;
 			*)    ui_box_line "    ${UI_D}${txt}${UI_NC}" ;;
 		esac
 	done < <(mailrep_scan)
