@@ -165,10 +165,73 @@ _secrel_php_net() {
 		exit(1);' "$f" "$br" 2>/dev/null
 }
 
+# Записи журнала изменений Debian (changelog.Debian, можно .gz): «версия|число CVE|дата», новые сверху
+_secrel_deb_log() {
+	zcat -f -- "$1" 2>/dev/null | awk '
+		/^[^ \t][^ ]* \([^)]*\) [^;]*;/ { v = $2; gsub(/[()]/, "", v); n = 0; next }
+		/CVE-[0-9]+-[0-9]+/ { n += gsub(/CVE-[0-9]+-[0-9]+/, "&") }
+		/^ -- / { d = $0; sub(/^.*>[ \t]+/, "", d); print v "|" n "|" d }'
+}
+
+# Сколько CVE в записях журнала новее установленной версии
+_secrel_new_cves() {
+	local v n d sum=0
+	while IFS='|' read -r v n d; do
+		dpkg --compare-versions "$v" gt "$2" 2>/dev/null && sum=$((sum + n))
+	done < <(_secrel_deb_log "$1")
+	echo "$sum"
+}
+
+# Последняя запись журнала с CVE: «дд.мм.гггг|число CVE|дней назад»
+_secrel_last_backport() {
+	local v n d ts
+	while IFS='|' read -r v n d; do
+		((n > 0)) || continue
+		ts="$(date -d "$d" +%s 2>/dev/null)" || return 1
+		echo "$(date -d "@$ts" +%d.%m.%Y)|${n}|$(( ($(date +%s) - ts) / 86400 ))"
+		return 0
+	done < <(_secrel_deb_log "$1")
+	return 1
+}
+
+# Журнал изменений установленного PHP ветки
+_secrel_php_changelog() {
+	local f
+	for f in "${SECREL_DOC_DIR:-/usr/share/doc}/php$1-common/changelog.Debian.gz" "${SECREL_DOC_DIR:-/usr/share/doc}/php$1-fpm/changelog.Debian.gz"; do
+		[[ -s "$f" ]] && { echo "$f"; return 0; }
+	done
+	return 1
+}
+
+# Журнал изменений новой сборки из репозитория. apt changelog для Sury не работает, поэтому
+# один раз на версию скачиваем пакет phpX.Y-common (около мегабайта) и берём журнал из него.
+_secrel_cand_changelog() {
+	local br="$1" cand="$2" dir f tmp deb
+	dir="${SECREL_CACHE:-$(_secrel_cache_dir)}" || return 1
+	[[ -n "$dir" ]] || return 1
+	f="${dir}/php${br}-common_${cand//[^A-Za-z0-9.+~-]/_}.changelog"
+	[[ -s "$f" ]] && { echo "$f"; return 0; }
+	command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1 || return 1
+	tmp="$(mktemp -d)" || return 1
+	chmod 755 "$tmp"   # apt скачивает от пользователя _apt
+	if (cd "$tmp" && timeout 90 apt-get download -qq "php${br}-common=${cand}" >/dev/null 2>&1); then
+		for deb in "$tmp"/*.deb; do
+			[[ -f "$deb" ]] || continue
+			dpkg-deb --fsys-tarfile "$deb" 2>/dev/null | tar -xO --wildcards '*/changelog.Debian.gz' 2>/dev/null | zcat 2>/dev/null >"${f}.tmp"
+			break
+		done
+		[[ -s "${f}.tmp" ]] && mv -f "${f}.tmp" "$f"
+		rm -f "${f}.tmp"
+	fi
+	rm -rf "$tmp"
+	find "$dir" -maxdepth 1 -name 'php*-common_*.changelog' -mtime +60 -delete 2>/dev/null
+	[[ -s "$f" ]] && echo "$f"
+}
+
 _secrel_php() {
-	local d br pkg inst cand ui uc net f rc nv sec
+	local d br pkg inst cand ui uc net f rc nv sec cl ncve bp
 	f="$(_secrel_fetch php-active.json "$SECREL_PHP_URL")" || f=""
-	for d in /etc/php/*/fpm; do
+	for d in "${SECREL_PHP_ETC:-/etc/php}"/*/fpm; do
 		[[ -d "$d" ]] || continue
 		br="$(basename "$(dirname "$d")")"
 		[[ "$br" =~ ^[0-9]+\.[0-9]+$ ]] || continue
@@ -178,18 +241,38 @@ _secrel_php() {
 		cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
 		ui="$(_secrel_upstream "$inst")"
 		if [[ -n "$cand" && "$cand" != "(none)" ]] && dpkg --compare-versions "$cand" gt "$inst"; then
+			# что в новой сборке: исправления безопасности или только упаковка
+			ncve=""
+			cl="$(_secrel_cand_changelog "$br" "$cand")" && ncve="$(_secrel_new_cves "$cl" "$inst")"
 			uc="$(_secrel_upstream "$cand")"
 			if [[ "$uc" != "$ui" ]]; then
-				echo "warn|PHP ${ui}, в репозитории ${uc}: luckyctl update pkgs"
-			else
+				echo "warn|PHP ${ui}, в репозитории ${uc}$( [[ "${ncve:-0}" != 0 ]] && echo " (исправлений безопасности: ${ncve})"): luckyctl update pkgs"
+				continue
+			elif [[ -n "$ncve" && "$ncve" != 0 ]]; then
+				echo "warn|PHP ${ui}: в репозитории новая сборка с исправлениями безопасности (${ncve}), luckyctl update pkgs"
+				continue
+			elif [[ -z "$ncve" ]]; then
 				echo "warn|PHP ${ui}: в репозитории новая сборка, luckyctl update pkgs"
+				continue
 			fi
-			continue
+			# без исправлений безопасности: не тревожим, но говорим, и проверяем ветку дальше
+			echo "info|PHP ${ui}: в репозитории новая сборка без исправлений безопасности, поставится с luckyctl update pkgs"
 		fi
 		[[ -n "$f" ]] || { echo "ok|PHP ${ui}: последняя версия в репозитории"; continue; }
 		net="$(_secrel_php_net "$f" "$br")"; rc=$?
 		if ((rc == 1)); then
-			echo "warn|PHP ${br}: поддержка закончилась, исправлений от php.net нет. Переведите сайты на новую версию"
+			# php.net ветку не поддерживает, но Sury переносит в неё исправления из новых версий
+			bp=""
+			cl="$(_secrel_php_changelog "$br")" && bp="$(_secrel_last_backport "$cl")"
+			if [[ -n "$bp" ]] && (( ${bp##*|} <= ${SECREL_BACKPORT_DAYS:-180} )); then
+				local bd bn
+				IFS='|' read -r bd bn _ <<<"$bp"
+				echo "info|PHP ${br}: поддержка закончилась на php.net, но исправления безопасности переносит репозиторий пакетов (последний раз ${bd}, уязвимостей: ${bn}). Переход на новую версию стоит планировать"
+			elif [[ -n "$bp" ]]; then
+				echo "warn|PHP ${br}: поддержка закончилась, исправления последний раз переносились ${bp%%|*}. Переведите сайты на новую версию"
+			else
+				echo "warn|PHP ${br}: поддержка закончилась, исправлений от php.net нет. Переведите сайты на новую версию"
+			fi
 			continue
 		fi
 		nv="${net%% *}"; sec=""; [[ "$net" == *" security" ]] && sec=" с исправлениями безопасности"

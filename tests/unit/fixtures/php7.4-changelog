@@ -1,0 +1,62 @@
+php7.4 (1:7.4.33-38+debsuryorg12.1+1) bookworm; urgency=medium
+
+  * No-change backport to bookworm.
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 20 Nov 2026 15:29:05 +0100
+
+php7.4 (1:7.4.33-38) unstable; urgency=medium
+
+  * Speed up the cleanup of old symlinks in the maintainer scripts
+  * Remove the cleanup of unversioned /etc/php/mods-available from preinst
+  * Add upstream patch to fix SOAP DTD node being matched as an element
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 20 Nov 2026 14:51:53 +0100
+
+php7.4 (1:7.4.33-37+debsuryorg12.1+php+1) bookworm; urgency=medium
+
+  * No-change backport to bookworm.
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 18 Nov 2026 16:33:32 +0100
+
+php7.4 (1:7.4.33-37) unstable; urgency=medium
+
+  * Run the upstream test suite with autopkgtest instead of during the
+    build
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 18 Nov 2026 13:29:14 +0100
+
+php7.4 (1:7.4.33-36) unstable; urgency=medium
+
+  * Backported from 8.2.36
+   + [CVE-2026-129538] PHP-CGI out-of-bounds read and write during
+     PATH_INFO correction.
+   + [CVE-2026-129496] Timezone cache use-after-free can lead to remote
+     code execution.
+   + [CVE-2026-129289] PHP-FPM request smuggling through an unread HTTP
+     request body.
+   + [CVE-2026-129292] PHP-FPM status endpoint XSS via unescaped user and
+     script fields.
+   + [CVE-2026-129291] PHP-FPM epoll use-after-free can lead to local
+     privilege escalation.
+   + [CVE-2026-128090] PHAR OpenSSL signature bypass via algorithm
+     downgrade.
+   + [CVE-2026-126714] Partially overwritten session files can lead to
+     remote code execution.
+   + [CVE-2026-115560] Session serializer mismatch can lead to remote code
+     execution.
+   + [CVE-2026-15353] SOAP information disclosure through malformed array
+     dimensions.
+   + [CVE-2026-129506] SOAP use-after-free when processing DTD entity
+     references.
+   + [CVE-2026-128064] Mixed-case HTTPS and FTPS URLs can expose data in
+     plaintext.
+   + [CVE-2026-127960] Denial of service through folded HTTP response
+     headers.
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 17 Nov 2026 15:59:33 +0100
+
+php7.4 (1:7.4.33-35) unstable; urgency=medium
+
+  * Fixed multiple issues in fpm_get_status()
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 12 Nov 2026 15:19:24 +0100
