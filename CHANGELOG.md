@@ -4,7 +4,7 @@
 возможностями. Обновиться: `luckyctl self-update`, вернуться назад:
 `luckyctl rollback luckystack`.
 
-## Не выпущено
+## 0.1.11 — 2026-11-23
 
 - Модуль очистки кэша nginx `ngx_cache_purge` теперь собирается из поддерживаемого
   форка https://github.com/nginx-modules/ngx_cache_purge (выпуск 3.0.4) вместо
