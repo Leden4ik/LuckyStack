@@ -123,7 +123,8 @@ $FIXES = array(
 	'/Пакетов к обновлению|setup\.log/u'              => $page.'?tab=update',
 	'/Shell-пользовател/u'                            => 'sites/shell_user_list.php',
 	'/^PHP [0-9.]+:? поддержка закончилась/u'        => 'sites/web_vhost_domain_list.php',
-	'/luckyctl update (nginx|pkgs)/u'                 => $page.'?tab=update',
+	'/^Roundcube 1[.][0-9]+ больше не/u'              => $page.'?tab=settings',
+	'/luckyctl update (nginx|pkgs|security)/u'        => $page.'?tab=update',
 	'/^PHP [0-9.]+/u'                                 => 'sites/web_vhost_domain_list.php',
 );
 // Пояснение к строке проверки: текст с рабочими ссылками (адреса только https, после экранирования)

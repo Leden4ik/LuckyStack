@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
 # lib/nodejs.sh — Этап (опц.): Node.js из официального репозитория NodeSource.
-# Версия выбирается в мастере (NODEJS_VERSION: 20/22/24). Ставит node + npm.
+# Версия выбирается в мастере (NODEJS_VERSION: 24/26/22). Ставит node + npm.
 # =============================================================================
 
 stage_nodejs() {
-	local ver="${NODEJS_VERSION:-22}"
+	local ver="${NODEJS_VERSION:-24}"
 	ui_info "Node.js ${UI_BOLD}${ver}.x${UI_NC} (NodeSource)"
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then

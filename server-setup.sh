@@ -838,16 +838,17 @@ run_wizard() {
 	# Пакет Debian обновляется через apt, но исправления безопасности приходят с задержкой
 	# (в ноябре 2026 в bookworm висели 20 уязвимостей, давно закрытых у разработчиков).
 	if [[ " $UI_CHECK_RESULT " == *" webmail "* ]]; then
+		# 1.6.22 (ноябрь 2026) — последний выпуск 1.6, исправления дальше только в 1.7
 		local _rcs=1; [[ "${RC_SOURCE:-}" == "debian" ]] && _rcs=3
-		[[ "${RC_SOURCE:-}" == "upstream" && "${RC_BRANCH:-1.6}" == "1.7" ]] && _rcs=2
+		[[ "${RC_SOURCE:-}" == "upstream" && "${RC_BRANCH:-}" == "1.6" ]] && _rcs=2
 		ui_menu "Откуда ставить Roundcube (вебмейл)" "$_rcs" \
-			"С сайта разработчиков, ветка 1.6 LTS (рекомендуется: исправления сразу, обновляет --update)" \
-			"С сайта разработчиков, ветка 1.7 (новые возможности, нужен PHP 8.1+)" \
+			"С сайта разработчиков, ветка 1.7 (рекомендуется: исправления сразу, обновляет luckyctl update)" \
+			"С сайта разработчиков, ветка 1.6 (больше не получает исправлений)" \
 			"Из пакетов Debian (обновляет apt, исправления приходят с задержкой)"
 		case "$UI_MENU_CHOICE" in
-			2) config_set RC_SOURCE upstream; config_set RC_BRANCH 1.7 ;;
+			2) config_set RC_SOURCE upstream; config_set RC_BRANCH 1.6 ;;
 			3) config_set RC_SOURCE debian ;;
-			*) config_set RC_SOURCE upstream; config_set RC_BRANCH 1.6 ;;
+			*) config_set RC_SOURCE upstream; config_set RC_BRANCH 1.7 ;;
 		esac
 	fi
 
@@ -915,13 +916,13 @@ run_wizard() {
 	# Версия Node.js — спрашиваем только если выбран
 	if [[ " $UI_CHECK_RESULT " == *" nodejs "* ]]; then
 		ui_menu "Версия Node.js" 1 \
-			"22 LTS (рекомендуется)" \
-			"20 LTS" \
-			"24 (Current)"
+			"24 LTS (рекомендуется, поддержка до апреля 2028)" \
+			"26 LTS (новейшая, поддержка до апреля 2029)" \
+			"22 LTS (поддержка до апреля 2027)"
 		case "$UI_MENU_CHOICE" in
-			1) config_set NODEJS_VERSION 22 ;;
-			2) config_set NODEJS_VERSION 20 ;;
-			3) config_set NODEJS_VERSION 24 ;;
+			2) config_set NODEJS_VERSION 26 ;;
+			3) config_set NODEJS_VERSION 22 ;;
+			*) config_set NODEJS_VERSION 24 ;;
 		esac
 	fi
 
@@ -1395,7 +1396,7 @@ run_summary() {
 		ui_box_line "PostgreSQL:        ${UI_D}роль postgres / пароль в setup.conf${UI_NC}"
 	fi
 	[[ "$(state_get nodejs)" == "done" ]] && \
-		ui_box_line "Node.js:           ${UI_W}${NODEJS_VERSION:-22}.x${UI_NC} (node, npm)"
+		ui_box_line "Node.js:           ${UI_W}${NODEJS_VERSION:-24}.x${UI_NC} (node, npm)"
 	if [[ "$(state_get monit)" == "done" ]]; then
 		if [[ "${MONIT_EXPOSE:-n}" == "y" && -n "${MONIT_ALLOW_IP:-}" ]]; then
 			ui_box_line "Monit:             ${UI_C}https://${SERVER_FQDN:-<server>}:2812${UI_NC} (admin / MONIT_PASSWORD)"

@@ -279,30 +279,9 @@ if (( ${#problems[@]} > 0 )); then
 	"$NOTIFY" -e monitor -l warn "Проблемы (${#problems[@]})" "$(printf '• %s\n' "${problems[@]}")" || true
 fi
 
-# Вышла новая версия Roundcube (стоит с сайта разработчиков): GitHub спрашиваем не чаще раза
-# в сутки, об одной версии сообщаем один раз. Обновление: luckyctl update.
-rc_ini=/opt/roundcube/program/include/iniset.php
-if [[ -f "$rc_ini" ]] && command -v php >/dev/null 2>&1; then
-	st=/var/lib/server-monitor; mkdir -p "$st"
-	rc_cur="$(grep -oE "RCMAIL_VERSION'?,[[:space:]]*'[0-9.]+" "$rc_ini" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')"
-	if [[ -n "$rc_cur" ]] && [[ -z "$(find "$st/rc-latest" -mmin -1380 2>/dev/null)" ]]; then
-		curl -fsSL --max-time 20 "https://api.github.com/repos/roundcube/roundcubemail/releases?per_page=40" 2>/dev/null \
-			| php -r '$b=$argv[1]; foreach ((array)json_decode(stream_get_contents(STDIN), true) as $x) {
-				if (empty($x["prerelease"]) && preg_match("/^".preg_quote($b)."\\.[0-9]+$/", $x["tag_name"] ?? "")) { echo $x["tag_name"]; break; } }' \
-				"${rc_cur%.*}" >"$st/rc-latest.tmp" 2>/dev/null && [[ -s "$st/rc-latest.tmp" ]] && mv -f "$st/rc-latest.tmp" "$st/rc-latest"
-		rm -f "$st/rc-latest.tmp"
-	fi
-	rc_new="$(cat "$st/rc-latest" 2>/dev/null)"
-	if [[ -n "$rc_cur" && -n "$rc_new" ]] && dpkg --compare-versions "$rc_cur" lt "$rc_new" \
-	   && [[ "$(cat "$st/rc-notified" 2>/dev/null)" != "$rc_new" ]]; then
-		"$NOTIFY" -e monitor -l warn "Roundcube: вышла версия ${rc_new}" \
-			"Стоит ${rc_cur}. Разработчики выпускают исправления безопасности именно так. Обновить: luckyctl update (раздел безопасности, с бэкапом и откатом)." \
-			&& echo "$rc_new" >"$st/rc-notified"
-	fi
-fi
-
-# Вышли исправления безопасности для nginx (по nginx.org), OpenSSL в сборке nginx или PHP
-# (luckyctl cve). Об одном и том же наборе сообщаем один раз, новый набор — снова.
+# Вышли исправления безопасности или новые версии: nginx (по nginx.org), OpenSSL в сборке nginx,
+# PHP, Roundcube, Rspamd, MariaDB, CrowdSec (luckyctl cve). Новые выпуски Roundcube раньше
+# проверялись здесь отдельно, теперь это часть luckyctl cve. Об одном и том же наборе сообщаем один раз, новый набор — снова.
 fixes=""
 if [[ -x /usr/local/sbin/luckyctl ]]; then
 	st=/var/lib/server-monitor; mkdir -p "$st"

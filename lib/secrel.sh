@@ -284,9 +284,64 @@ _secrel_php() {
 	done
 }
 
+# Roundcube с сайта разработчиков (/opt/roundcube): новый выпуск в своей ветке и конец поддержки
+# ветки. Пакет Debian (RC_SOURCE=debian) обновляет apt, его не трогаем.
+SECREL_RC_DIR="${SECREL_RC_DIR:-/opt/roundcube}"
+SECREL_RC_URL="${SECREL_RC_URL:-https://api.github.com/repos/roundcube/roundcubemail/releases?per_page=40}"
+SECREL_RC_EOL="${SECREL_RC_EOL:-1.5 1.6}"   # ветки без исправлений (1.6.22 — последний выпуск 1.6)
+_secrel_roundcube() {
+	local ini="${SECREL_RC_DIR}/program/include/iniset.php" cur br f out latest sec
+	[[ -f "$ini" ]] || return 0
+	cur="$(grep -oE "RCMAIL_VERSION'?,[[:space:]]*'[0-9]+\.[0-9]+\.[0-9]+" "$ini" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')"
+	[[ -n "$cur" ]] || return 0
+	br="${cur%.*}"
+	f="$(_secrel_fetch roundcube-releases.json "$SECREL_RC_URL")" || f=""
+	if [[ -n "$f" ]] && command -v php >/dev/null 2>&1; then
+		# «последний выпуск ветки|1, если в выпусках новее установленного есть исправления безопасности»
+		out="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); if (!is_array($j)) exit(1);
+			$br = $argv[2]; $cur = $argv[3]; $last = ""; $sec = 0;
+			foreach ($j as $x) {
+				$t = $x["tag_name"] ?? "";
+				if (!empty($x["draft"]) || !empty($x["prerelease"]) || !preg_match("/^" . preg_quote($br, "/") . "[.][0-9]+$/", $t)) continue;
+				if ($last === "" || version_compare($t, $last, ">")) $last = $t;
+				if (version_compare($t, $cur, ">") && stripos($x["body"] ?? "", "security") !== false) $sec = 1;
+			}
+			echo $last, "|", $sec, "\n";' "$f" "$br" "$cur" 2>/dev/null)"
+		latest="${out%%|*}"; sec="${out##*|}"
+	fi
+	if [[ -n "$latest" ]] && dpkg --compare-versions "$cur" lt "$latest" 2>/dev/null; then
+		echo "warn|Roundcube ${cur}, вышел ${latest}$([[ "$sec" == 1 ]] && echo " с исправлениями безопасности"): luckyctl update security"
+	elif [[ -n "$latest" ]]; then
+		echo "ok|Roundcube ${cur}: последняя версия ветки ${br}"
+	fi
+	if [[ " ${SECREL_RC_EOL} " == *" ${br} "* ]]; then
+		echo "warn|Roundcube ${br} больше не получает исправлений безопасности. Перейти на 1.7: ветка Roundcube в панели (Обслуживание сервера → Настройки) или RC_BRANCH=1.7 в setup.conf и luckyctl update security"
+	fi
+}
+
+# Пакеты из сторонних репозиториев стека: в репозитории есть версия новее установленной.
+# PHP проверяется отдельно (_secrel_php), nginx собирается из исходников.
+SECREL_APT_PKGS="${SECREL_APT_PKGS:-rspamd:Rspamd mariadb-server:MariaDB crowdsec:CrowdSec}"
+_secrel_apt() {
+	local e p name inst cand
+	for e in $SECREL_APT_PKGS; do
+		p="${e%%:*}"; name="${e#*:}"
+		inst="$(dpkg-query -W -f='${Version}' "$p" 2>/dev/null)" || continue
+		[[ -n "$inst" ]] || continue
+		cand="$(apt-cache policy "$p" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+		if [[ -n "$cand" && "$cand" != "(none)" ]] && dpkg --compare-versions "$cand" gt "$inst" 2>/dev/null; then
+			echo "warn|${name} $(_secrel_upstream "$inst"), в репозитории $(_secrel_upstream "$cand"): luckyctl update pkgs"
+		else
+			echo "ok|${name} $(_secrel_upstream "$inst"): последняя версия в репозитории"
+		fi
+	done
+}
+
 secrel_scan() {
 	_secrel_nginx
 	_secrel_php
+	_secrel_roundcube
+	_secrel_apt
 }
 
 # luckyctl security [--plain]
@@ -295,7 +350,7 @@ run_security_releases() {
 	for a in "$@"; do [[ "$a" == "--plain" ]] && plain=1; done
 	if ((plain)); then secrel_scan; return 0; fi
 	ui_header "Исправления безопасности"
-	ui_box_top "nginx, OpenSSL, PHP"
+	ui_box_top "nginx, OpenSSL, PHP, Roundcube, Rspamd, MariaDB, CrowdSec"
 	while IFS='|' read -r lvl txt; do
 		case "$lvl" in
 			ok)   ui_box_line "  ${UI_G}✓${UI_NC} ${txt}" ;;

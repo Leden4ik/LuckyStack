@@ -14,8 +14,8 @@
 # в _nginx_autoset_versions. Значения ниже — ФОЛБЭК на случай отсутствия сети.
 # OpenSSL: ветка из OPENSSL_BRANCH, последний выпуск ветки и PCRE2 определяются автоматически
 # (OpenSSL и PCRE2 с GitHub), значения ниже и в _openssl_branch_ver — фолбэк. Проверено 2026-11-05.
-: "${NGINX_STABLE_VER:=1.30.7}"
-: "${NGINX_MAINLINE_VER:=1.31.9}"
+: "${NGINX_STABLE_VER:=1.30.8}"
+: "${NGINX_MAINLINE_VER:=1.31.10}"
 : "${OPENSSL_VER:=}"            # пин версии; пусто = последний выпуск ветки OPENSSL_BRANCH
 : "${PCRE2_VER:=10.49}"
 : "${ZLIBNG_VER:=2.3.3}"
@@ -602,6 +602,28 @@ _nginx_compile() {
 		[[ -f "$cdir/$f" ]] && cp -n "$cdir/$f" "/etc/nginx/$f"
 	done
 	ui_success "nginx ${NGINX_VER} скомпилирован и установлен в /usr/sbin/nginx"
+	_nginx_prune_sources
+}
+
+# Исходники прошлых версий в каталоге сборки после успешной сборки не нужны (на проде их
+# набиралось сотни мегабайт). Оставляем текущие версии, git-модули и собранный OpenSSL (quictls).
+_nginx_prune_sources() {
+	[[ -n "${NGX_SRC:-}" && -n "${NGX_MOD:-}" && "$NGX_SRC" == /*/* && -d "$NGX_MOD" ]] || return 0
+	local d b n=0
+	for d in "$NGX_SRC"/nginx-* "$NGX_MOD"/openssl-*.tar.gz "$NGX_MOD"/pcre2-* "$NGX_MOD"/zlib-ng-* \
+	         "$NGX_MOD"/libmaxminddb-* "$NGX_MOD"/ngx_http_geoip2_module-* "$NGX_MOD"/ngx_devel_kit-* \
+	         "$NGX_MOD"/ngx_cache_purge "$NGX_MOD"/ngx_cache_purge-*; do
+		[[ -e "$d" ]] || continue
+		b="$(basename "$d")"
+		case "$b" in
+			"nginx-${NGINX_VER:-}" | "openssl-${OPENSSL_VER:-}.tar.gz" | "pcre2-${PCRE2_VER}" | "zlib-ng-${ZLIBNG_VER}" \
+			| "libmaxminddb-${LIBMAXMINDDB_VER}" | "ngx_http_geoip2_module-${GEOIP2_VER}" \
+			| "ngx_devel_kit-${NGINX_DEV_KIT}" | "ngx_cache_purge-${CACHEPURGE_VER}") continue ;;
+		esac
+		rm -rf -- "$d" && n=$((n + 1))
+	done
+	((n)) && ui_info "Каталог сборки: удалены исходники прошлых версий (${n})."
+	return 0
 }
 
 # --- Пользователь, директории, systemd, logrotate ---------------------------

@@ -8,7 +8,7 @@
 # Версия MariaDB определяется АВТОМАТИЧЕСКИ (последняя LTS Stable из REST API).
 # Фолбэк — проверенная с ISPConfig LTS. Порядок: явный пин MARIADB_VERSION →
 # авто (MARIADB_AUTO_VERSION=y) → фолбэк. Результат кешируется на прогон.
-: "${MARIADB_FALLBACK_VER:=11.4}"
+: "${MARIADB_FALLBACK_VER:=12.3}"
 
 # Последняя LTS Stable из официального REST API MariaDB (пусто при неудаче).
 _mariadb_resolve_version() {

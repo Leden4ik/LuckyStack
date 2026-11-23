@@ -280,8 +280,8 @@ stage_webmail_summary() {
 RC_DIR=/opt/roundcube
 RC_LOG_DIR=/var/log/roundcube
 RC_KEY_FPR=F3E4C04BB3DB5D4215C45F7F5AB2BAA141C4F7D5
-RC_FALLBACK_1_6=1.6.20   # если GitHub API недоступен (на 2026-11-05)
-RC_FALLBACK_1_7=1.7.5
+RC_FALLBACK_1_6=1.6.22   # если GitHub API недоступен (на 2026-11-23; 1.6.22 последний выпуск 1.6)
+RC_FALLBACK_1_7=1.7.7
 RC_BACKUP_DIR=/var/backups/roundcube
 
 _rcu_version() {  # $1 — каталог Roundcube → версия или пусто

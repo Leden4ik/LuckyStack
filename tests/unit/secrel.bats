@@ -124,3 +124,43 @@ php_setup() {
 	run _secrel_php
 	[[ "$output" == *"warn|PHP 7.4: поддержка закончилась, исправлений от php.net нет"* ]]
 }
+
+# --- Roundcube и пакеты из сторонних репозиториев ------------------------------
+
+rc_setup() {
+	command -v php >/dev/null || skip "нет php"
+	command -v dpkg >/dev/null || skip "нет dpkg"
+	SECREL_RC_DIR="${BATS_TEST_TMPDIR}/rc"; mkdir -p "$SECREL_RC_DIR/program/include"
+	SECREL_CACHE="${BATS_TEST_TMPDIR}/cache"; mkdir -p "$SECREL_CACHE"
+	cp "$REPO/tests/unit/fixtures/roundcube-releases.json" "$SECREL_CACHE/roundcube-releases.json"
+}
+rc_ver() { echo "define('RCMAIL_VERSION', '$1');" >"$SECREL_RC_DIR/program/include/iniset.php"; }
+
+@test "Roundcube 1.6.21: вышел 1.6.22 с исправлениями, а ветка 1.6 больше не поддерживается" {
+	rc_setup; rc_ver 1.6.21
+	run _secrel_roundcube
+	[[ "$output" == *"warn|Roundcube 1.6.21, вышел 1.6.22 с исправлениями безопасности: luckyctl update security"* ]]
+	[[ "$output" == *"warn|Roundcube 1.6 больше не получает исправлений безопасности"* ]]
+}
+
+@test "Roundcube 1.7.7 последний в ветке: всё хорошо, предварительные выпуски не считаются" {
+	rc_setup; rc_ver 1.7.7
+	run _secrel_roundcube
+	[ "$output" = "ok|Roundcube 1.7.7: последняя версия ветки 1.7" ]
+}
+
+@test "Roundcube не с сайта разработчиков: проверка молчит" {
+	rc_setup; rm -f "$SECREL_RC_DIR/program/include/iniset.php"
+	run _secrel_roundcube
+	[ -z "$output" ]
+}
+
+@test "Rspamd: в репозитории новее, MariaDB последняя, CrowdSec не установлен" {
+	command -v dpkg >/dev/null || skip "нет dpkg"
+	dpkg-query() { case "$*" in *rspamd*) echo -n "4.3.0-1~25c9ecc~bookworm" ;; *mariadb-server*) echo -n "1:12.3.4+maria~deb12" ;; *) return 1 ;; esac; }
+	apt-cache() { case "$*" in *rspamd*) printf '  Candidate: 4.3.1-1~73b8fe1~bookworm\n' ;; *) printf '  Candidate: 1:12.3.4+maria~deb12\n' ;; esac; }
+	run _secrel_apt
+	[[ "$output" == *"warn|Rspamd 4.3.0, в репозитории 4.3.1: luckyctl update pkgs"* ]]
+	[[ "$output" == *"ok|MariaDB 12.3.4: последняя версия в репозитории"* ]]
+	[[ "$output" != *CrowdSec* ]]
+}
