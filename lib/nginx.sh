@@ -22,7 +22,10 @@
 : "${LIBMAXMINDDB_VER:=1.14.1}"
 : "${GEOIP2_VER:=3.4}"
 : "${NGINX_DEV_KIT:=0.3.4}"
-# Прим.: headers-more, brotli, zstd, ngx_cache_purge, set-misc, vts тянутся git-ом
+# ngx_cache_purge: поддерживаемый форк github.com/nginx-modules/ngx_cache_purge (оригинал FRiCKLE
+# не менялся с 2014 года). Берём выпуск, а не последний коммит: у форка бывают предварительные 4.x.
+: "${CACHEPURGE_VER:=3.0.4}"
+# Прим.: headers-more, brotli, zstd, set-misc, vts тянутся git-ом
 # (latest), поэтому версии для них здесь НЕ задаются.
 
 # --- Пути --------------------------------------------------------------------
@@ -235,8 +238,10 @@ _nginx_fetch_sources() {
 	[[ "$NGX_ZSTD" == "y" ]] && _ngx_clone \
 		"https://github.com/tokers/zstd-nginx-module.git" "$NGX_MOD/zstd-nginx-module"
 	# cache purge
-	[[ "$NGX_CACHEPURGE" == "y" ]] && _ngx_clone \
-		"https://github.com/FRiCKLE/ngx_cache_purge" "$NGX_MOD/ngx_cache_purge"
+	if [[ "$NGX_CACHEPURGE" == "y" ]]; then
+		_ngx_fetch_tar "https://github.com/nginx-modules/ngx_cache_purge/archive/refs/tags/${CACHEPURGE_VER}.tar.gz" \
+			"$NGX_MOD/ngx_cache_purge-${CACHEPURGE_VER}" 1 || return 1
+	fi
 	# set-misc (+ devel kit)
 	if [[ "$NGX_SETMISC" == "y" ]]; then
 		_ngx_fetch_tar "https://github.com/simplresty/ngx_devel_kit/archive/v${NGINX_DEV_KIT}.tar.gz" \
@@ -504,7 +509,7 @@ _nginx_assemble_flags() {
 	[[ "$NGX_BROTLI" == "y" ]] && add+=" --add-module=$NGX_MOD/ngx_brotli"
 	[[ "$NGX_HEADERMOD" == "y" ]] && add+=" --add-module=$NGX_MOD/headers-more-nginx-module"
 	[[ "$NGX_GEOIP" == "y" ]] && add+=" --add-module=$NGX_MOD/ngx_http_geoip2_module-${GEOIP2_VER}"
-	[[ "$NGX_CACHEPURGE" == "y" ]] && add+=" --add-module=$NGX_MOD/ngx_cache_purge"
+	[[ "$NGX_CACHEPURGE" == "y" ]] && add+=" --add-module=$NGX_MOD/ngx_cache_purge-${CACHEPURGE_VER}"
 	[[ "$NGX_VTS" == "y" ]] && add+=" --add-module=$NGX_MOD/nginx-module-vts"
 	[[ "$NGX_ZSTD" == "y" ]] && add+=" --add-module=$NGX_MOD/zstd-nginx-module"
 	if [[ "$NGX_SETMISC" == "y" ]]; then
