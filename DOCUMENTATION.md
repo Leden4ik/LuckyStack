@@ -886,6 +886,10 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
     (`_ngx_clone`: fetch + reset), brotli пересобирается при смене коммита (`out/.ss-rev`).
   - libmaxminddb с 1.14 требует `pkg-config`, он теперь в зависимостях сборки. Если библиотека всё же не собралась:
     при уже установленной версии будет предупреждение и сборка с ней, без установленной сборка nginx останавливается.
+  - `ngx_cache_purge` берётся из поддерживаемого форка https://github.com/nginx-modules/ngx_cache_purge, выпуск
+    `CACHEPURGE_VER` (3.0.4), архивом по тегу. Оригинал FRiCKLE не менялся с 2014 года. Директивы те же
+    (`fastcgi_cache_purge`, `proxy_cache_purge` и т. д.). Проверено на тестовом с nginx 1.30.8: MISS → HIT →
+    очистка 200 → MISS, для отсутствующего ключа 412.
   - Патчи nginx (`use_openssl_md5_sha1`, `nginx_zlib-ng`) лежат в `assets/nginx/patches`, проверенные копии с
     указанием источника и sha256. Раньше они качались с master чужих репозиториев при каждой сборке во временные
     файлы `/tmp` с постоянными именами.
