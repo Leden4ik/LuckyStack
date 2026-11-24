@@ -384,7 +384,7 @@ footer { margin-top: 64px; padding: 22px 0 40px; border-top: 1px solid var(--lin
       <thead><tr><th>Часть</th><th>Что стоит</th><th>Откуда</th></tr></thead>
       <tbody>
         <tr><td>Веб-сервер</td><td>nginx с HTTP/3, Brotli, zstd и OpenSSL 3.5 LTS. Полноценный Apache будет в одном из следующих выпусков</td><td class="n">сборка</td></tr>
-        <tr><td>PHP</td><td>Несколько версий FPM сразу, от 7.4 до 8.5, версия выбирается у каждого сайта</td><td class="n">Sury</td></tr>
+        <tr><td>PHP</td><td>Несколько версий FPM сразу, от 7.4 до 8.6, версия выбирается у каждого сайта</td><td class="n">Sury</td></tr>
         <tr><td>Базы</td><td>MariaDB последней LTS, Redis. По желанию PostgreSQL</td><td class="n">mariadb.org</td></tr>
         <tr><td>Почта</td><td>Postfix и Dovecot, Rspamd и ClamAV, вебмейл Roundcube, DKIM, SPF и DMARC</td><td class="n">apt / roundcube.net</td></tr>
         <tr><td>Панель</td><td>ISPConfig 3.3 и группа Дополнения: 10 наших пунктов меню</td><td class="n">ispconfig.org</td></tr>
@@ -491,7 +491,7 @@ dig +short server.example.com
         <tr><td>Доступ к панели по IP</td><td class="n">пусто</td><td>Свои постоянные IP через пробел. Пусто значит панель открыта всем, так делать не стоит</td></tr>
         <tr><td>Порт SSH</td><td class="n">текущий</td><td>Enter оставляет тот порт, на котором SSH работает сейчас. Если поменять, смена произойдёт в самом конце, под защитой от потери доступа</td></tr>
         <tr><td>Версия ISPConfig</td><td class="n">nightly</td><td>Свежая сборка, надёжно ставится на новых PHP. Stable это официальный релиз, на новых PHP его автоустановка иногда не доходит до конца</td></tr>
-        <tr><td>Откуда ставить Roundcube</td><td class="n">с сайта разработчиков</td><td>Так приходит свежая версия, и её можно откатить. Из пакетов Debian старее, но обновляется вместе с системой</td></tr>
+        <tr><td>Откуда ставить Roundcube</td><td class="n">с сайта разработчиков, ветка 1.7</td><td>Так приходит свежая версия, и её можно откатить. Ветка 1.6 больше не получает исправлений. Из пакетов Debian старее, но обновляется вместе с системой</td></tr>
         <tr><td>Бэкап и уведомления</td><td class="n">бэкап в 03:30</td><td>Каталог, сколько дней хранить, почта и Telegram для уведомлений</td></tr>
       </tbody>
     </table></div>
@@ -512,7 +512,7 @@ dig +short server.example.com
         <tr><td class="m">database</td><td><span class="tag core">всегда</span></td><td>MariaDB и Redis. Существующий пароль root не сбрасывается</td></tr>
         <tr><td class="m">webserver</td><td><span class="tag core">всегда</span></td><td>Сборка nginx из исходников</td></tr>
         <tr><td class="m">php</td><td><span class="tag core">всегда</span></td><td>PHP-FPM выбранных версий, OPcache, безопасные настройки</td></tr>
-        <tr><td class="m">nodejs</td><td><span class="tag">по выбору</span></td><td>Node.js LTS</td></tr>
+        <tr><td class="m">nodejs</td><td><span class="tag">по выбору</span></td><td>Node.js LTS: 24 по умолчанию, можно 26 или 22</td></tr>
         <tr><td class="m">phpmyadmin</td><td><span class="tag">по выбору</span></td><td>phpMyAdmin или Adminer, доступ только по имени сервера и списку IP</td></tr>
         <tr><td class="m">postgresql</td><td><span class="tag">по выбору</span></td><td>PostgreSQL рядом с MariaDB</td></tr>
         <tr><td class="m">mail</td><td><span class="tag">по выбору</span></td><td>Postfix и Dovecot, вход только по TLS</td></tr>
@@ -581,8 +581,9 @@ luckyctl install --from security   <span class="c"># начать с этапа 
         <tr><td class="m">install</td><td>Мастер установки. С <code>--resume</code>, <code>--only</code>, <code>--from</code>, <code>--unattended</code>, <code>--reconfigure</code>, <code>--force</code>, <code>--dry-run</code>, <code>--clean-build</code></td></tr>
         <tr><td class="m">status</td><td>Что установлено, каких версий и что ждёт обновления</td></tr>
         <tr><td class="m">check</td><td>Проверка здоровья: службы, порты, сертификаты, бэкапы, безопасность, исправления безопасности и репутация почты</td></tr>
-        <tr><td class="m">cve</td><td>Вышли ли исправления безопасности для nginx, OpenSSL в сборке nginx и PHP, и нет ли версий PHP, которые больше не поддерживаются</td></tr>
+        <tr><td class="m">cve</td><td>Вышли ли исправления безопасности для nginx, OpenSSL в сборке nginx, PHP и Roundcube, есть ли новые версии Rspamd, MariaDB и CrowdSec, не закончилась ли поддержка версии PHP или ветки Roundcube</td></tr>
         <tr><td class="m">blacklist</td><td>Репутация почты: обратная запись PTR внешнего IP, сам IP в чёрных списках Spamhaus ZEN, SpamCop, PSBL и Mailspike, почтовые домены в Spamhaus DBL</td></tr>
+        <tr><td class="m">sites</td><td>Как отвечают все сайты ISPConfig по https и http, панель, Roundcube и phpMyAdmin, и что изменилось с прошлой проверки</td></tr>
         <tr><td class="m">changes</td><td>Какие файлы настроек добавил, изменил или удалил каждый шаг установщика. <code>changes 5</code> покажет последние 5 шагов, <code>changes /etc/nginx/nginx.conf</code> историю одного файла</td></tr>
         <tr><td class="m">log 100</td><td>Последние строки журнала установщика</td></tr>
         <tr><td class="m">paths</td><td>Где лежат код, настройки, состояние и журнал</td></tr>
@@ -592,7 +593,7 @@ luckyctl install --from security   <span class="c"># начать с этапа 
         <tr><td class="m">rollback luckystack</td><td>Вернуть прошлый выпуск самого LuckyStack</td></tr>
         <tr><td class="m">backup</td><td>Сделать бэкап сейчас, <code>backup list</code> покажет снимки</td></tr>
         <tr><td class="m">restore</td><td>Восстановить из снимка: базы, конфиги, сайты, почту</td></tr>
-        <tr><td class="m">add-php 8.5</td><td>Добавить версию PHP, она сразу появится в списке у сайтов</td></tr>
+        <tr><td class="m">add-php 8.6</td><td>Добавить версию PHP, она сразу появится в списке у сайтов</td></tr>
         <tr><td class="m">remove-php</td><td>Удалить версию PHP. Не даст удалить ту, на которой есть сайты</td></tr>
         <tr><td class="m">timezone Europe/Moscow</td><td>Сменить часовой пояс везде: система, PHP, MariaDB, ISPConfig, cron</td></tr>
         <tr><td class="m">adopt</td><td>Подключить бэкап, уведомления и защиту к серверу, собранному вручную</td></tr>
@@ -614,7 +615,7 @@ luckyctl install --from security   <span class="c"># начать с этапа 
 │   Debian GNU/Linux 12 (bookworm)                                             │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ Веб-сервер ─────────────────────────────────────────────────────────────────┐
-│   nginx: 1.30.7 · <span class="t-ok">active</span>                                                     │
+│   nginx: 1.30.8 · <span class="t-ok">active</span>                                                     │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ PHP ────────────────────────────────────────────────────────────────────────┐
 │   php7.4: PHP 7.4.33 · <span class="t-ok">active</span>                                                │
@@ -646,7 +647,7 @@ luckyctl install --from security   <span class="c"># начать с этапа 
     <p class="muted" style="font-size:.85rem">Сокращено: убраны блоки со службами и админками БД.</p>
 
     <h3 id="cli-check">luckyctl check</h3>
-    <p>Проверяет сервер по пунктам и в конце пишет итог. <span style="color:var(--ok)">✓</span> значит всё хорошо, <span style="color:var(--warn)">!</span> стоит посмотреть, <span style="color:var(--bad)">✗</span> что-то сломано. Кроме служб, портов, сертификатов и бэкапов в ней есть разделы Исправления безопасности (то же, что <code>luckyctl cve</code>) и Репутация почты (то же, что <code>luckyctl blacklist</code>, если стоит почта). Та же проверка раз в шесть часов идёт в фоне, и когда появляется новая проблема, приходит уведомление. Об исправлениях и чёрных списках раз в день пишет монитор.</p>
+    <p>Проверяет сервер по пунктам и в конце пишет итог. <span style="color:var(--ok)">✓</span> значит всё хорошо, <span style="color:var(--warn)">!</span> стоит посмотреть, <span style="color:var(--bad)">✗</span> что-то сломано, <span style="color:var(--cool)">i</span> к сведению, в итог не входит. Кроме служб, портов, сертификатов и бэкапов в ней есть разделы Исправления безопасности (то же, что <code>luckyctl cve</code>) и Репутация почты (то же, что <code>luckyctl blacklist</code>, если стоит почта). Та же проверка раз в шесть часов идёт в фоне, и когда появляется новая проблема, приходит уведомление. Об исправлениях и чёрных списках раз в день пишет монитор.</p>
     <figure class="screen">
       <div class="bar"><i></i><i></i><i></i><span>root@server: luckyctl check</span></div>
 <pre><span class="t-dim">════════════════════════════════════════════════════════════════════════════════</span>
@@ -671,9 +672,11 @@ luckyctl install --from security   <span class="c"># начать с этапа 
 │   <span class="t-ok">✓</span> LE server.example.com: валиден (87 дн.)                                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ Исправления безопасности ───────────────────────────────────────────────────┐
-│   <span class="t-ok">✓</span> nginx 1.30.7: известных уязвимостей нет (nginx.org)                      │
+│   <span class="t-ok">✓</span> nginx 1.30.8: известных уязвимостей нет (nginx.org)                      │
 │   <span class="t-ok">✓</span> OpenSSL в nginx 3.5.9: последний в ветке 3.5                             │
 │   <span class="t-ok">✓</span> PHP 8.4.28: последняя версия                                             │
+│   <span class="t-ok">✓</span> Roundcube 1.7.7: последняя версия ветки 1.7                              │
+│   <span class="t-ok">✓</span> Rspamd 4.3.1: последняя версия в репозитории                             │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ Репутация почты ────────────────────────────────────────────────────────────┐
 │   <span class="t-ok">✓</span> PTR 203.0.113.10 → server.example.com                                    │
@@ -688,18 +691,23 @@ luckyctl install --from security   <span class="c"># начать с этапа 
 │   <span class="t-warn">!</span> почта (/var/vmail) в бэкап не входит                                     │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌─ Итог ───────────────────────────────────────────────────────────────────────┐
-│   <span class="t-ok">OK: 41</span>   <span class="t-warn">ВНИМАНИЕ: 5</span>   ОШИБКА: 0                                           │
+│   <span class="t-ok">OK: 43</span>   <span class="t-warn">ВНИМАНИЕ: 5</span>   ОШИБКА: 0                                           │
 └──────────────────────────────────────────────────────────────────────────────┘
 <span class="t-warn">[!]</span> Есть предупреждения (5) — посмотрите пункты с !.</pre>
     </figure>
-    <p class="muted" style="font-size:.85rem">Сокращено: из 46 пунктов показана часть. Код выхода 0, если ошибок нет, поэтому команду можно вызывать из своего мониторинга.</p>
+    <p class="muted" style="font-size:.85rem">Сокращено: из 48 пунктов показана часть. Код выхода 0, если ошибок нет, поэтому команду можно вызывать из своего мониторинга.</p>
 
     <h3 id="cli-cve">luckyctl cve и luckyctl blacklist</h3>
-    <p><code>luckyctl cve</code> смотрит, не вышли ли исправления безопасности для того, что стоит на сервере. nginx сверяется со списком уязвимостей на nginx.org, OpenSSL внутри nginx с последним выпуском своей ветки, PHP с репозиторием пакетов и php.net. Если что-то вышло, команда пишет, чем обновиться: <code>luckyctl update nginx</code> или <code>luckyctl update pkgs</code>. Ещё она предупреждает о версиях PHP, которые больше не поддерживаются. В сеть она ходит раз в сутки, в остальное время берёт сохранённый ответ.</p>
+    <p><code>luckyctl cve</code> смотрит, не вышли ли исправления безопасности и новые версии для того, что стоит на сервере. nginx сверяется со списком уязвимостей на nginx.org, OpenSSL внутри nginx с последним выпуском своей ветки, PHP с репозиторием пакетов и php.net, Roundcube с выпусками на GitHub. Для Rspamd, MariaDB и CrowdSec проверяется, нет ли в их репозиториях версии новее. Если что-то вышло, команда пишет, чем обновиться: <code>luckyctl update nginx</code>, <code>luckyctl update pkgs</code> или <code>luckyctl update security</code>.</p>
+    <p>Новая сборка пакета PHP без исправлений безопасности показывается пометкой, а не предупреждением: проверка читает её журнал изменений. Для старых веток PHP вроде 7.4 она учитывает, что репозиторий Sury переносит в них исправления из новых версий, и пишет, когда это было последний раз. Если ветка Roundcube больше не получает исправлений, как 1.6 с ноября 2026, будет предупреждение перейти на 1.7. В сеть проверка ходит раз в сутки, в остальное время берёт сохранённый ответ.</p>
     <p><code>luckyctl blacklist</code> проверяет репутацию почты: есть ли обратная запись PTR у внешнего IP и указывает ли имя обратно на него, нет ли IP в списках Spamhaus ZEN, SpamCop, PSBL и Mailspike, нет ли почтовых доменов в Spamhaus DBL. Spamhaus не отвечает через публичные DNS вроде 1.1.1.1, поэтому запросы идут через локальный BIND. Если DNS-сервер не ставили, эта часть проверки пропускается.</p>
     <p>Обе проверки входят в <code>luckyctl check</code> и в панель, а ежедневный монитор присылает уведомление, когда находится что-то новое.</p>
-    <pre class="code">luckyctl cve                        <span class="c"># исправления для nginx, OpenSSL и PHP</span>
+    <pre class="code">luckyctl cve                        <span class="c"># исправления и новые версии программ</span>
 luckyctl blacklist                  <span class="c"># PTR и чёрные списки</span></pre>
+
+    <h3 id="cli-sites">luckyctl sites</h3>
+    <p>Показывает, как отвечают все активные сайты ISPConfig по https и http, панель, Roundcube и phpMyAdmin. Запросы идут на этот же сервер по имени сайта, поэтому DNS и внешний firewall на результат не влияют. В конце команда пишет, что изменилось с прошлой проверки, так что её удобно запускать до и после своих правок. Код выхода 1, если какой-то адрес не отвечает или отдаёт ошибку 5xx. Та же проверка сама идёт при каждом обновлении, об этом в разделе <a href="#update-sitecheck">Обновления</a>.</p>
+    <pre class="code">luckyctl sites                      <span class="c"># ответы сайтов и что изменилось</span></pre>
 
     <h3 id="cli-changes">luckyctl changes</h3>
     <p>Каждый шаг установки и обновления, а ещё add-php, remove-php, смена часового пояса, откат, восстановление и adopt записывают, какие файлы настроек они добавили (+), изменили (~) или удалили (-). Смотрятся /etc, файлы ISPConfig, /usr/local/sbin, /usr/local/bin, настройки и плагины Roundcube и crontab. Файл, переписанный тем же содержимым, изменением не считается. Журнал ведётся с версии 0.1.5 и лежит в <code>/var/log/luckystack/changes.log</code>.</p>
@@ -770,7 +778,7 @@ luckyctl changes /etc/nginx/nginx.conf   <span class="c"># история одн
   <section class="doc" id="updates">
     <span class="label eyebrow">Работа с сервером</span>
     <h2>Обновления</h2>
-    <p>Обновление из панели и командой <code>luckyctl update</code> идёт по одному пути. По умолчанию обновляются пакеты и наши настройки, ядро не трогается.</p>
+    <p>Обновление из панели и командой <code>luckyctl update</code> идёт по одному пути. По умолчанию обновляются пакеты и наши настройки, ядро не трогается. После обновления из консоли панель сама обновляет сведения и проверку в течение пары минут.</p>
 
     <div class="flow">
       <div><span class="label">Шаг 1</span><b>Бэкап</b><p>Только если выбрано ядро. Не удался бэкап, обновление не начинается.</p></div>
@@ -786,8 +794,12 @@ luckyctl changes /etc/nginx/nginx.conf   <span class="c"># история одн
       <li>Шаблоны ISPConfig: HTTP/2, TLS 1.3 и HTTP/3 для панели и сайтов.</li>
       <li>Ограничение доступа по IP: панель только по имени сервера, phpMyAdmin только со своих адресов.</li>
       <li>Все панели группы Дополнения и регистрация версий PHP в ISPConfig.</li>
+      <li>Метапакеты PHP вроде php-mysql закрепляются на своей ветке, чтобы apt full-upgrade не поставил новую ветку PHP целиком.</li>
     </ul>
     <p>Каждый пункт можно запускать сколько угодно раз. Если всё уже на месте, он так и напишет и ничего не тронет.</p>
+
+    <h3 id="update-sitecheck">Проверка сайтов до и после</h3>
+    <p>Перед первым шагом обновление запоминает, как отвечают панель, Roundcube, phpMyAdmin и каждый сайт ISPConfig по https и http, а после всех шагов спрашивает их ещё раз. Если адрес перестал отвечать, стал отдавать ошибку 5xx или 4xx вместо страницы, это попадает в итог обновления как ошибка: в журнал задания в панели и в уведомление. Такие адреса перепроверяются несколько раз, потому что службы могут ещё перезапускаться. Если в этот раз пересобирался nginx и обновление запущено из консоли, проверка сразу предлагает вернуть прошлую сборку. Адреса, которые не работали ещё до обновления, ошибкой не считаются. Выключить проверку: <code>UPDATE_SITECHECK=n</code>. Вручную то же самое делает <a href="#cli-sites">luckyctl sites</a>.</p>
 
     <h3>Ядро только по запросу</h3>
     <p>Пересборка nginx и обновление ISPConfig делаются только если вы их отметили в панели или подтвердили в консоли. Пароль root MariaDB и основные конфиги служб при обновлении не трогаются.</p>
@@ -842,16 +854,16 @@ luckyctl rollback luckystack        <span class="c"># вернуть прошл�
     <p>Прошлая сборка лежит как <code>/usr/sbin/nginx.backup</code>. Перед подменой она проверяет ваш текущий конфиг, и если не принимает его, откат отменяется, а nginx остаётся как был.</p>
     <figure class="screen">
       <div class="bar"><i></i><i></i><i></i><span>root@server: luckyctl rollback nginx</span></div>
-<pre><span class="t-step">[→]</span> Откат nginx: nginx/1.30.7 OpenSSL 3.5.9 → nginx/1.30.7 OpenSSL 4.1.0
-<span class="t-ok">[✓]</span> nginx: откат выполнен, работает nginx/1.30.7 OpenSSL 4.1.0. Прошлая сборка теперь nginx/1.30.7 OpenSSL 3.5.9</pre>
+<pre><span class="t-step">[→]</span> Откат nginx: nginx/1.30.8 OpenSSL 3.5.9 → nginx/1.30.8 OpenSSL 4.1.0
+<span class="t-ok">[✓]</span> nginx: откат выполнен, работает nginx/1.30.8 OpenSSL 4.1.0. Прошлая сборка теперь nginx/1.30.8 OpenSSL 3.5.9</pre>
     </figure>
 
     <h3>Roundcube</h3>
     <p>Перед обновлением вебмейла сохраняются прошлый каталог, схема и дамп его базы. Если новая версия меняла схему, при откате база возвращается из дампа. Если после отката страница входа не открывается, всё возвращается на новую версию само.</p>
     <figure class="screen">
       <div class="bar"><i></i><i></i><i></i><span>root@server: luckyctl rollback roundcube</span></div>
-<pre><span class="t-step">[→]</span> Откат Roundcube 1.7.5 → 1.6.20
-<span class="t-ok">[✓]</span> Roundcube: откат на 1.6.20 выполнен. Следующий --update снова предложит новую версию этой ветки.</pre>
+<pre><span class="t-step">[→]</span> Откат Roundcube 1.7.7 → 1.6.22
+<span class="t-ok">[✓]</span> Roundcube: откат на 1.6.22 выполнен. Следующий --update снова предложит новую версию этой ветки.</pre>
     </figure>
 
     <h3>LuckyStack</h3>
@@ -939,6 +951,7 @@ luckyctl rollback luckystack        <span class="c"># вернуть прошл�
         <tr><td class="m">BACKUP_RETENTION_DAYS</td><td class="n">7</td><td>Сколько дней хранить</td></tr>
         <tr><td class="m">BACKUP_INCLUDE_WWW</td><td class="n">n</td><td>Добавить файлы сайтов</td></tr>
         <tr><td class="m">BACKUP_INCLUDE_MAIL</td><td class="n">n</td><td>Добавить почтовые ящики. Мастер предлагает включить: почта обычно небольшая, а терять её обиднее всего</td></tr>
+        <tr><td class="m">ISPC_SITE_BACKUPS</td><td class="n">спрашивает</td><td>Ежедневные бэкапы сайтов средствами ISPConfig (Sites → сайт → Backup). При обновлении спрашивается, по умолчанию «нет». Если выключены сознательно (n), проверка пишет об этом пометкой</td></tr>
         <tr><td class="m">BACKUP_REMOTE_TYPE</td><td class="n">none</td><td>Копия на другой сервер: rsync по SSH или rclone в S3, B2 и SFTP</td></tr>
       </tbody>
     </table></div>
@@ -1045,6 +1058,7 @@ server-backup.sh --restore --all --yes</pre>
         <tr><td class="m">HTTP_IP_POLICY</td><td class="n">landing / redirect / deny</td><td>Что отдавать на 80 по IP или чужому имени: стартовую страницу, переадресацию на имя сервера или ничего</td></tr>
         <tr><td class="m">PHP_DEFAULT</td><td class="n">8.3</td><td>Версия PHP по умолчанию для новых сайтов и служебных страниц</td></tr>
         <tr><td class="m">PHP_CLI_DEFAULT</td><td class="n">как PHP_DEFAULT</td><td>Что запускается командой php в консоли и cron</td></tr>
+        <tr><td class="m">NODEJS_VERSION</td><td class="n">24 / 26 / 22</td><td>Версия Node.js, если он выбран</td></tr>
       </tbody>
     </table></div>
 
@@ -1056,7 +1070,7 @@ server-backup.sh --restore --all --yes</pre>
         <tr><td class="m">MARIADB_AUTO_VERSION</td><td class="n">y / n</td><td>Последняя LTS или закреплённая версия</td></tr>
         <tr><td class="m">INSTALL_CLAMAV</td><td class="n">y / n</td><td>Антивирус для почты, требует около 1,5 ГБ памяти</td></tr>
         <tr><td class="m">RC_SOURCE</td><td class="n">upstream / debian</td><td>Откуда ставить Roundcube</td></tr>
-        <tr><td class="m">RC_BRANCH</td><td class="n">1.6 / 1.7</td><td>Ветка Roundcube</td></tr>
+        <tr><td class="m">RC_BRANCH</td><td class="n">1.7 / 1.6</td><td>Ветка Roundcube. 1.7 по умолчанию, 1.6 больше не получает исправлений. Переход здесь или в панели, затем <code>luckyctl update security</code></td></tr>
       </tbody>
     </table></div>
 
@@ -1194,7 +1208,7 @@ chmod -R go-w /opt/luckystack</pre>
   <section class="doc" id="roadmap">
     <span class="label eyebrow">Справочник</span>
     <h2>Что дальше</h2>
-    <p>Сейчас вышла версия 0.1.7. После первого выпуска добавились установка одной командой с проверкой подписи, подписанные выпуски, команды <code>luckyctl cve</code>, <code>blacklist</code> и <code>changes</code>, проверки на GitHub и сквозные тесты на тестовом сервере. Следом:</p>
+    <p>Сейчас вышла версия 0.1.11. После первого выпуска добавились установка одной командой с проверкой подписи, подписанные выпуски, проверка сайтов до и после обновления, команды <code>luckyctl cve</code>, <code>blacklist</code>, <code>sites</code> и <code>changes</code>, PHP 8.6, Roundcube 1.7, проверки на GitHub, сквозные тесты на тестовом сервере и английская версия сайта. Следом:</p>
     <ul>
       <li>Полноценный Apache: те же защита, тюнинг и дополнения, что у nginx.</li>
       <li>Копия бэкапов на второй сервер, которую нельзя удалить с основного.</li>
