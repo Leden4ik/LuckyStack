@@ -55,6 +55,14 @@ _hostcert_probe_webroot() {  # $1=fqdn $2=webroot
 # Определить docroot живого vhost'а для FQDN (nginx root / apache DocumentRoot).
 _hostcert_detect_docroot() {  # $1=fqdn -> docroot в stdout
 	local fqdn="$1" f root
+	# Apache: ISPConfig кладёт глобальный Alias /.well-known/acme-challenge (999-acme.conf) в свой
+	# каталог, и он перекрывает DocumentRoot любого сайта. Тогда webroot = цель алиаса без хвоста.
+	for f in "${APACHE_ETC:-/etc/apache2}"/sites-enabled/* "${APACHE_ETC:-/etc/apache2}"/conf-enabled/*; do
+		[[ -f "$f" ]] || continue
+		root="$(grep -oiP '^\s*Alias\s+"?/\.well-known/acme-challenge/?"?\s+"?\K[^"\s]+' "$f" 2>/dev/null | head -1)"
+		root="${root%/}"
+		[[ "$root" == */.well-known/acme-challenge ]] && { echo "${root%/.well-known/acme-challenge}"; return 0; }
+	done
 	for f in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
 		[[ -f "$f" ]] || continue
 		grep -qE "server_name[^;]*(\s|^)${fqdn}(\s|;)" "$f" 2>/dev/null || continue

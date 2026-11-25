@@ -1047,42 +1047,22 @@ install_crowdsec() {
 	# Без свежего hub-индекса collections install сыпет ошибками
 	sys_run "Обновление hub CrowdSec" cscli hub update || true
 	# Коллекция парсера под активный веб-сервер (nginx или apache2)
-	local web_collection="crowdsecurity/nginx" web_type="nginx"
-	[[ "${WEBSERVER:-nginx}" == "apache" ]] && { web_collection="crowdsecurity/apache2"; web_type="apache2"; }
+	local web_collection="crowdsecurity/nginx"
+	[[ "${WEBSERVER:-nginx}" == "apache" ]] && web_collection="crowdsecurity/apache2"
 	local c
 	for c in "$web_collection" crowdsecurity/http-cve crowdsecurity/base-http-scenarios \
 	         crowdsecurity/whitelist-good-actors crowdsecurity/linux; do
 		sys_run "cscli collections install $c" cscli collections install "$c" || true
 	done
-	# Acquisition: логи активного веб-сервера + per-site логи ISPConfig.
-	# type ДОЛЖЕН совпадать с парсером коллекции, иначе строки не разбираются.
-	# ВАЖНО (nginx): публичные access-логи анонимизируются (GDPR, последний октет → .0) — если
-	# скармливать их CrowdSec, он банит сетевой адрес «.0», а не реального атакующего. Поэтому для
-	# nginx читаем РЕАЛЬНЫЕ IP из отдельного crowdsec.log (его пишут nginx.conf + vhost-шаблон рядом
-	# с публичным логом). Apache в нашей сборке логи не анонимизирует — там читаем обычные access.
-	mkdir -p /etc/crowdsec/acquis.d
-	# nginx: ВСЕ сайты пишут crowdsec-строки в ЕДИНЫЙ /var/log/nginx/crowdsec.log (vhost-шаблон),
-	# поэтому читаем ОДИН стабильный файл — новые сайты покрываются автоматически, без per-site
-	# glob (его CrowdSec не подхватывал для каталогов сайтов, созданных после старта → пробел).
-	# Apache логи не анонимизирует → там читаем обычные per-site access (glob оставляем).
-	local acq_files
-	if [[ "${WEBSERVER:-nginx}" == "apache" ]]; then
-		acq_files=$'  - /var/log/apache2/*access*.log\n  - /var/log/ispconfig/httpd/*/access.log'
-	else
-		acq_files='  - /var/log/nginx/crowdsec.log'
-	fi
-	cat >/etc/crowdsec/acquis.d/web-ispconfig.yaml <<ACQ
-filenames:
-${acq_files}
-labels:
-  type: ${web_type}
-ACQ
+	# Acquisition: логи активного веб-сервера с реальными IP (см. _crowdsec_web_acquis).
+	_crowdsec_web_acquis >/dev/null
 	# Подчищаем устаревшее имя из прошлых версий установщика
 	rm -f /etc/crowdsec/acquis.d/nginx-ispconfig.yaml
 	# Пакет CrowdSec при установке создаёт setup.nginx.yaml, читающий АНОНИМИЗИРОВАННЫЙ
 	# /var/log/nginx/*.log (баны .0 + дубль нашего crowdsec.log). Наш web-ispconfig.yaml уже
-	# покрывает nginx реальными IP — убираем пакетный (только для nginx).
-	[[ "${WEBSERVER:-nginx}" == "apache" ]] || _crowdsec_drop_anon_acquis
+	# покрывает nginx реальными IP — убираем пакетный. У Apache пакетный setup.apache2.yaml
+	# дублирует наш файл (каждая строка считалась дважды).
+	_crowdsec_drop_anon_acquis
 	# CAPI: community blocklist (упреждающие баны). Идемпотентная страховка поверх postinst пакета.
 	_crowdsec_capi_register
 	# Еженедельное авто-обновление правил детекта (hub сам не апгрейдится).
@@ -1097,6 +1077,8 @@ ACQ
 	# анонимизирует (последний октет .0) → CrowdSec там банит «.0»; mail.log с РЕАЛЬНЫМИ
 	# IP, поэтому почтовые брутеры банятся по-настоящему. E2E: 81.30.98.0/24 (IR) забанен.
 	_crowdsec_enable_mail
+	# Apache: коллекцию modsecurity пакет CrowdSec ставит сам, оставляем её только при APACHE_WAF=block
+	declare -F _apache_waf_crowdsec >/dev/null && _apache_waf_crowdsec
 	# Bouncer тип 1 — firewall (nftables, без модулей nginx)
 	apt_install crowdsec-firewall-bouncer-nftables || \
 		apt_install crowdsec-firewall-bouncer-iptables || \
@@ -1182,17 +1164,68 @@ _crowdsec_mail_nodup_syslog() {
 	fi
 }
 
+# Что CrowdSec читает из веб-логов (/etc/crowdsec/acquis.d/web-ispconfig.yaml).
+# Публичные логи сайтов ISPConfig может анонимизировать (последний октет .0): по ним CrowdSec
+# банил бы сеть .0, а не атакующего. Поэтому читаем только общие логи с реальными IP, по одному
+# стабильному файлу: маску по каталогам сайтов CrowdSec не подхватывает для сайтов, созданных
+# после его старта, а после перезапуска читал бы их вдобавок к общему логу (двойной счёт).
+#   nginx:  /var/log/nginx/crowdsec.log (пишут nginx.conf и vhost-шаблон)
+#   Apache: other_vhosts_access.log (общий лог Debian, сюда пишут все vhost без своего CustomLog,
+#           то есть все сайты ISPConfig и панель) + error.log; при APACHE_WAF=block error.log ещё
+#           и с меткой modsecurity (сообщения WAF)
+# type должен совпадать с парсером коллекции. Печатает "changed", если файл изменился.
+_crowdsec_web_acquis() {
+	local f=/etc/crowdsec/acquis.d/web-ispconfig.yaml t files type=nginx
+	if [[ "${WEBSERVER:-nginx}" == "apache" ]]; then
+		type=apache2
+		files=$'  - /var/log/apache2/other_vhosts_access.log\n  - /var/log/apache2/access.log\n  - /var/log/apache2/error.log'
+		command -v a2enconf >/dev/null 2>&1 && a2enconf -q other-vhosts-access-log >>"$SETUP_LOG" 2>&1
+	else
+		files='  - /var/log/nginx/crowdsec.log'
+	fi
+	mkdir -p /etc/crowdsec/acquis.d
+	t="$(mktemp)"
+	printf 'filenames:\n%s\nlabels:\n  type: %s\n' "$files" "$type" >"$t"
+	# WAF в режиме блокировки: парсер ModSecurity берёт только строки с меткой modsecurity, поэтому
+	# error.log читается второй раз с этой меткой (с меткой apache2 сообщения WAF не разбираются).
+	if [[ "${WEBSERVER:-nginx}" == "apache" && "${APACHE_WAF:-detect}" == block ]]; then
+		printf -- '---\nfilenames:\n  - /var/log/apache2/error.log\nlabels:\n  type: modsecurity\n' >>"$t"
+	fi
+	if cmp -s "$t" "$f"; then rm -f "$t"; return 0; fi
+	mv -f "$t" "$f"; chmod 644 "$f"
+	echo changed
+}
+
+# --update: перечитать acquis веб-логов на уже стоящем сервере (Apache раньше читал логи сайтов).
+_crowdsec_web_acquis_update() {
+	command -v cscli >/dev/null 2>&1 || return 0
+	[[ "$(_crowdsec_web_acquis)" == changed ]] || return 0
+	if [[ "${WEBSERVER:-nginx}" == "apache" ]] && command -v apache2ctl >/dev/null 2>&1; then
+		apache2ctl configtest >>"$SETUP_LOG" 2>&1 && systemctl reload apache2 >>"$SETUP_LOG" 2>&1
+	fi
+	systemctl reload crowdsec >>"$SETUP_LOG" 2>&1 || systemctl restart crowdsec >>"$SETUP_LOG" 2>&1 || true
+	ui_info "CrowdSec: веб-логи читаются из общего лога с реальными IP."
+}
+
 # Убрать авто-acquis пакета CrowdSec (setup.nginx.yaml), который читает анонимизированный
 # /var/log/nginx/*.log → CrowdSec банит сетевой .0 (а не атакующего) и дублирует наш crowdsec.log.
 # Реальные IP nginx читаются из web-ispconfig.yaml (crowdsec.log). Идемпотентно; reload подхватывает.
 # Зовётся из install_crowdsec (install) и из --update (для уже стоящих серверов).
+# Apache: пакетный setup.apache2.yaml читает /var/log/apache2/*.log, те же файлы, что наш
+# web-ispconfig.yaml, и CrowdSec считал каждый запрос дважды (вдвое быстрее до бана).
 _crowdsec_drop_anon_acquis() {
 	command -v cscli >/dev/null 2>&1 || return 0
-	[[ -f /etc/crowdsec/acquis.d/setup.nginx.yaml ]] || return 0
-	rm -f /etc/crowdsec/acquis.d/setup.nginx.yaml
+	local f=/etc/crowdsec/acquis.d/setup.nginx.yaml
+	[[ "${WEBSERVER:-nginx}" == "apache" ]] && f=/etc/crowdsec/acquis.d/setup.apache2.yaml
+	[[ -f "$f" && -f /etc/crowdsec/acquis.d/web-ispconfig.yaml ]] || return 0
+	rm -f "$f"
 	systemctl reload crowdsec >>"$SETUP_LOG" 2>&1 || systemctl restart crowdsec >>"$SETUP_LOG" 2>&1 || true
-	ui_info "CrowdSec: убран setup.nginx.yaml (читал анонимизированный лог → баны .0); nginx — через crowdsec.log."
-	log "crowdsec: removed pkg setup.nginx.yaml (anonymized acquis)"
+	if [[ "$f" == *apache2* ]]; then
+		ui_info "CrowdSec: убран setup.apache2.yaml (те же логи Apache читались дважды)."
+	else
+		ui_info "CrowdSec: убран setup.nginx.yaml (читал анонимизированный лог → баны .0); nginx — через crowdsec.log."
+	fi
+	log "crowdsec: removed pkg ${f##*/}"
 }
 
 # CAPI (CrowdSec Central API): регистрация для community blocklist — упреждающие баны IP,

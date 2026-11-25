@@ -2178,3 +2178,14 @@ _I18N["[dry-run]%s усиление, таймауты, brotli, сайт по у�
 _I18N["Блокировка — останавливает атаки; на некоторых сайтах возможны ложные срабатывания"]="Blocking: stops attacks; some sites may get false positives"
 _I18N["Наблюдение — записывает, что остановил бы, ничего не блокирует (рекомендуется для начала)"]="Detection: logs what it would have stopped, blocks nothing (recommended to start with)"
 _I18N["Не ставить"]="Don't install"
+
+# --- Строки интерфейса: установка, проверка, обновление, команды (ноябрь 2026) ---
+# %s в ключе — подставляемое значение (версия, путь, цвет), в переводе на том же месте.
+_I18N["CrowdSec: веб-логи с реальными IP"]="CrowdSec: web logs with real IPs"
+_I18N["CrowdSec: веб-логи читаются из общего лога с реальными IP."]="CrowdSec: web logs are read from the shared log with real IPs."
+_I18N["CrowdSec: убран setup.apache2.yaml (те же логи Apache читались дважды)."]="CrowdSec: removed setup.apache2.yaml (the same Apache logs were read twice)."
+_I18N["CrowdSec: убрать дубль чтения логов Apache"]="CrowdSec: stop reading Apache logs twice"
+
+# --- Строки интерфейса: установка, проверка, обновление, команды (ноябрь 2026) ---
+# %s в ключе — подставляемое значение (версия, путь, цвет), в переводе на том же месте.
+_I18N["CrowdSec: бан по сообщениям WAF выключен, пока WAF только наблюдает (APACHE_WAF=%s)."]="CrowdSec: banning on WAF messages is off while the WAF only observes (APACHE_WAF=%s)."

@@ -86,9 +86,10 @@ setup() {
 	grep -qx "TraceEnable Off" "$f"
 	! grep -q "X-Frame-Options" "$f"
 	HARDEN_CONF_CUSTOM=y HARDEN_HSTS=y _apache_hardening
-	grep -q 'Header setifempty X-Frame-Options "SAMEORIGIN"' "$f"
-	grep -q "Strict-Transport-Security" "$f"
-	grep -q "expr=%{HTTPS} == 'on'" "$f"
+	# только если ответ (PHP, vhost) ещё не несёт такой заголовок, иначе дубль
+	grep -q "Header set X-Frame-Options \"SAMEORIGIN\" \"expr=-z resp('X-Frame-Options')\"" "$f"
+	! grep -q setifempty "$f"
+	grep -q "expr=%{HTTPS} == 'on' && -z resp('Strict-Transport-Security')" "$f"
 	grep -q 'sql' "$f"
 }
 
@@ -107,6 +108,8 @@ setup() {
 	grep -q "DocumentRoot /var/www/html" "$f"
 	grep -q 'acme-challenge/ - \[L\]' "$f"
 	[ "$(grep -c 'RewriteRule ^ - \[F\]' "$f")" = 1 ]   # только на 443
+	# своё имя, иначе vhost берёт глобальный ServerName (FQDN) и перехватывает сайт хоста
+	[ "$(grep -c 'ServerName luckystack-default.invalid' "$f")" = 2 ]
 	! grep -q "R=301" "$f"
 	[ ! -e "$APACHE_ETC/sites-enabled/000-default.conf" ]
 }
@@ -155,4 +158,27 @@ setup() {
 @test "WAF: непонятный режим превращается в наблюдение" {
 	APACHE_WAF=strict _apache_waf
 	grep -qx "SecRuleEngine DetectionOnly" "$MODSEC_DIR/zz-luckystack.conf"
+}
+
+@test "brotli: клиентам с br выключается gzip (deflate.conf пакета стоит в цепочке раньше)" {
+	_apache_compress
+	f="$APACHE_ETC/conf-available/zz-luckystack-compress.conf"
+	grep -q 'SetEnvIfNoCase Accept-Encoding .* no-gzip' "$f"
+	grep -q 'BROTLI_COMPRESS;DEFLATE text/html' "$f"
+}
+
+@test "WAF и CrowdSec: бан по сообщениям WAF только в режиме блокировки" {
+	export WEBSERVER=apache CROWDSEC_ETC="$T/crowdsec"; mkdir -p "$CROWDSEC_ETC/collections"
+	cscli() { echo "cscli $*" >>"$CALLS"; }
+	# наблюдение: коллекцию, поставленную пакетом CrowdSec, убираем
+	touch "$CROWDSEC_ETC/collections/modsecurity.yaml"
+	_apache_waf_crowdsec detect
+	grep -q "cscli collections remove crowdsecurity/modsecurity" "$CALLS"
+	# блокировка: ставим, если нет
+	rm -f "$CROWDSEC_ETC/collections/modsecurity.yaml"; : >"$CALLS"
+	_apache_waf_crowdsec block
+	grep -q "cscli collections install crowdsecurity/modsecurity" "$CALLS"
+	# nginx не трогаем
+	: >"$CALLS"; WEBSERVER=nginx _apache_waf_crowdsec detect
+	! grep -q cscli "$CALLS"
 }

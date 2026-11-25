@@ -181,6 +181,7 @@ _apache_waf() {
 	fi
 	command -v apache2ctl >/dev/null 2>&1 || return 0
 	if [[ "$mode" == off ]]; then
+		_apache_waf_crowdsec off
 		if [[ -e "${APACHE_ETC}/mods-enabled/security2.load" ]]; then
 			a2dismod -q security2 >>"$SETUP_LOG" 2>&1
 			apache2ctl configtest >>"$SETUP_LOG" 2>&1 && systemctl reload apache2 >>"$SETUP_LOG" 2>&1
@@ -216,6 +217,7 @@ SecRule REQUEST_URI "@rx ^/(phpmyadmin|roundcube|webmail|pgadmin4)(/|\$)" "id:10
 SecAction "id:1009003,phase:1,pass,nolog,setvar:tx.crs_exclusions_wordpress=1,setvar:tx.crs_exclusions_drupal=1,setvar:tx.crs_exclusions_nextcloud=1,setvar:tx.crs_exclusions_phpbb=1"
 CONF
 	local f="$dir/zz-luckystack.conf"
+	_apache_waf_crowdsec "$mode"
 	if [[ -f "$f" ]] && cmp -s "$t" "$f" && [[ -e "${APACHE_ETC}/mods-enabled/security2.load" ]]; then rm -f "$t"; return 0; fi
 	[[ -f "$f" ]] && { prev="$(mktemp)"; cp -a "$f" "$prev"; }
 	install -m 644 "$t" "$f"; rm -f "$t"
@@ -228,19 +230,44 @@ CONF
 	rm -f "$prev"
 	systemctl reload apache2 >>"$SETUP_LOG" 2>&1 || true
 	if [[ "$mode" == block ]]; then
-		command -v cscli >/dev/null 2>&1 && cscli collections install crowdsecurity/modsecurity >>"$SETUP_LOG" 2>&1 \
-			&& systemctl reload crowdsec >>"$SETUP_LOG" 2>&1
 		ui_success "Apache: WAF блокирует атаки (ModSecurity + OWASP CRS). Журнал: /var/log/apache2/modsec_audit.log"
 	else
 		ui_success "Apache: WAF в режиме наблюдения, ничего не блокирует. Что он бы остановил: /var/log/apache2/modsec_audit.log"
 	fi
 }
 
+# CrowdSec и WAF. Сценарий crowdsecurity/modsecurity банит адрес по ОДНОМУ срабатыванию правила
+# уровня CRITICAL, даже когда WAF только наблюдает. Пакет CrowdSec ставит эту коллекцию сам, если
+# видит ModSecurity, поэтому держим её только при APACHE_WAF=block, иначе «наблюдение» банило бы
+# посетителей за ложные срабатывания. Сообщения WAF о сайтах ISPConfig лежат в их собственных
+# error.log (их не читаем: при анонимизации там адреса .0); повторные 403 от WAF на этих сайтах
+# CrowdSec видит в общем access-логе (http-generic-403-bf). Зовётся и после установки CrowdSec.
+_apache_waf_crowdsec() {  # $1 = detect|block|off (по умолчанию APACHE_WAF)
+	command -v cscli >/dev/null 2>&1 || return 0
+	[[ "${WEBSERVER:-nginx}" == apache ]] || return 0
+	local mode="${1:-${APACHE_WAF:-detect}}" have=n changed=n
+	[[ -e "${CROWDSEC_ETC:-/etc/crowdsec}/collections/modsecurity.yaml" ]] && have=y
+	# чтение error.log с меткой modsecurity (только в режиме блокировки), см. _crowdsec_web_acquis
+	declare -F _crowdsec_web_acquis >/dev/null \
+		&& [[ "$(APACHE_WAF="$mode" _crowdsec_web_acquis)" == changed ]] && changed=y
+	if [[ "$mode" == block && "$have" == n ]]; then
+		cscli collections install crowdsecurity/modsecurity >>"$SETUP_LOG" 2>&1 && changed=y
+	elif [[ "$mode" != block && "$have" == y ]]; then
+		cscli collections remove crowdsecurity/modsecurity >>"$SETUP_LOG" 2>&1 && changed=y
+		ui_info "CrowdSec: бан по сообщениям WAF выключен, пока WAF только наблюдает (APACHE_WAF=${mode})."
+	fi
+	[[ "$changed" == y ]] || return 0
+	systemctl reload crowdsec >>"$SETUP_LOG" 2>&1 || true
+}
+
 # --- Усиление ------------------------------------------------------------------
 # Всегда: скрыть версию, выключить TRACE, закрыть скрытые файлы и каталоги (кроме .well-known).
 # HARDEN_CONF_CUSTOM=y (как у nginx): заголовки безопасности и запрет секретных файлов и дампов.
-# HARDEN_HSTS=y: HSTS на https-ответах. Заголовки ставятся через setifempty: если сайт (PHP)
-# уже отдал свой, второй не добавляется (у nginx для этого понадобилась отдельная защита от дублей).
+# HARDEN_HSTS=y: HSTS на https-ответах. Заголовок ставится, только если ответ его ещё не несёт.
+# setifempty не годится: заголовки от PHP (FastCGI) и от "Header always" лежат в err_headers_out,
+# а setifempty смотрит одну таблицу, и получались дубли. resp() смотрит обе, а правила с always
+# выполняются раньше наших. Правило vhost без always идёт после нашего и заменяет его.
+# На ответах с ошибкой (404 и т.п.) наших заголовков нет, как у nginx с add_header без always.
 _apache_hardening() {
 	[[ "${DRY_RUN:-0}" == "1" ]] && { ui_info "${UI_D}[dry-run]${UI_NC} Apache: усиление (zz-luckystack-hardening.conf)"; return 0; }
 	command -v apache2ctl >/dev/null 2>&1 || return 0
@@ -267,11 +294,11 @@ _apache_hardening() {
 			echo "</FilesMatch>"
 			echo ""
 			echo "<IfModule mod_headers.c>"
-			echo '    Header setifempty X-Content-Type-Options "nosniff"'
-			echo '    Header setifempty X-Frame-Options "SAMEORIGIN"'
-			echo '    Header setifempty Referrer-Policy "strict-origin-when-cross-origin"'
+			echo "    Header set X-Content-Type-Options \"nosniff\" \"expr=-z resp('X-Content-Type-Options')\""
+			echo "    Header set X-Frame-Options \"SAMEORIGIN\" \"expr=-z resp('X-Frame-Options')\""
+			echo "    Header set Referrer-Policy \"strict-origin-when-cross-origin\" \"expr=-z resp('Referrer-Policy')\""
 			[[ "${HARDEN_HSTS:-n}" == "y" ]] && \
-				echo '    Header setifempty Strict-Transport-Security "max-age=15552000; includeSubDomains" "expr=%{HTTPS} == '"'on'"'"'
+				echo "    Header set Strict-Transport-Security \"max-age=15552000; includeSubDomains\" \"expr=%{HTTPS} == 'on' && -z resp('Strict-Transport-Security')\""
 			echo "</IfModule>"
 		fi
 	} >"$t"
@@ -326,12 +353,15 @@ _apache_compress() {
 	[[ "${DRY_RUN:-0}" == "1" ]] && { ui_info "${UI_D}[dry-run]${UI_NC} Apache: brotli"; return 0; }
 	command -v apache2ctl >/dev/null 2>&1 || return 0
 	[[ -f ${APACHE_ETC}/mods-available/brotli.load ]] || { ui_info "Apache: модуля brotli нет в этой сборке, остаётся gzip."; return 0; }
-	a2enmod -q brotli deflate filter >>"$SETUP_LOG" 2>&1
+	a2enmod -q brotli deflate filter setenvif >>"$SETUP_LOG" 2>&1
 	local t; t="$(mktemp)"
 	cat >"$t" <<'CONF'
 # luckystack: brotli для текстовых ответов. Клиентам без brotli отвечает mod_deflate (gzip).
 <IfModule mod_brotli.c>
     BrotliCompressionQuality 5
+    # deflate.conf пакета подключается раньше и ставит DEFLATE первым в цепочку: без этого
+    # клиент с br получал gzip. Тем, кто принимает br, gzip выключаем.
+    SetEnvIfNoCase Accept-Encoding "(^|[ ,])br([ ,;]|$)" no-gzip
     AddOutputFilterByType BROTLI_COMPRESS;DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml application/rss+xml application/manifest+json image/svg+xml font/ttf font/otf
 </IfModule>
 CONF
@@ -353,6 +383,8 @@ CONF
 # На 443 чужое имя получает 403 с сертификатом сервера. Без этого Apache отдавал первый сайт
 # из списка, и по его сертификату было видно, какие сайты живут на сервере.
 # Стандартный 000-default пакета выключается (файл остаётся).
+# Своё имя .invalid обязательно: без ServerName vhost берёт глобальное имя сервера (FQDN), и раз
+# он первый, перехватывает https://FQDN у сайта хоста.
 _apache_default_vhost() {
 	[[ "${DRY_RUN:-0}" == "1" ]] && { ui_info "${UI_D}[dry-run]${UI_NC} Apache: сайт по умолчанию (${HTTP_IP_POLICY:-landing})"; return 0; }
 	command -v apache2ctl >/dev/null 2>&1 || return 0
@@ -379,6 +411,7 @@ _apache_default_vhost() {
 	cat >"$t" <<APA
 # luckystack: запросы по IP и чужим именам (HTTP_IP_POLICY=${pol}). Пересоздаётся при luckyctl update.
 <VirtualHost *:80>
+    ServerName luckystack-default.invalid
     DocumentRoot /var/www/html
     <Directory /var/www/html>
         Options -Indexes +FollowSymLinks
@@ -389,6 +422,7 @@ _apache_default_vhost() {
     RewriteRule ^/\.well-known/acme-challenge/ - [L]
 ${rules}</VirtualHost>
 <VirtualHost *:443>
+    ServerName luckystack-default.invalid
     SSLEngine on
     SSLCertificateFile ${crt}
     SSLCertificateKeyFile ${key}

@@ -230,7 +230,9 @@ _rc_fix_plugin_perms() {
 # (hostcert: panel-fqdn-only, иначе 444) — ходим по FQDN; он резолвится в этот же сервер.
 _rc_soap_url() {
 	local port="${1:-${ISPCONFIG_PANEL_PORT:-8080}}" fqdn="${SERVER_FQDN:-$(hostname -f 2>/dev/null)}"
-	if [[ -n "$fqdn" ]] && grep -q 'panel-fqdn-only' /etc/nginx/sites-available/ispconfig.vhost 2>/dev/null \
+	# vhost панели nginx или Apache (у Apache запрет — <If> с Require all denied, ответ 403)
+	if [[ -n "$fqdn" ]] && grep -qs 'panel-fqdn-only' /etc/nginx/sites-available/ispconfig.vhost \
+	     /etc/apache2/sites-available/ispconfig.vhost \
 	   && getent hosts "$fqdn" >/dev/null 2>&1; then
 		echo "https://${fqdn}:${port}/remote/"
 	else

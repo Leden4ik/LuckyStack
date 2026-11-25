@@ -257,9 +257,16 @@ run_update_mode() {
 		# named -4 (IPv4-only исходящие), если на сервере нет IPv6 — гасит «address not available» в логе.
 		declare -F _dns_named_ipv4_only >/dev/null && [[ -f /etc/default/named ]] \
 			&& _upd_run "named: IPv4-only при отсутствии IPv6" _dns_named_ipv4_only
+		# CrowdSec: веб-логи только из общего лога с реальными IP (Apache раньше читал логи сайтов)
+		declare -F _crowdsec_web_acquis_update >/dev/null && command -v cscli >/dev/null 2>&1 \
+			&& _upd_run "CrowdSec: веб-логи с реальными IP" _crowdsec_web_acquis_update
 		# CrowdSec: убрать пакетный setup.nginx.yaml (читает анонимизир. лог → баны .0; есть наш crowdsec.log)
 		declare -F _crowdsec_drop_anon_acquis >/dev/null && [[ -f /etc/crowdsec/acquis.d/setup.nginx.yaml ]] \
 			&& _upd_run "CrowdSec: убрать анонимизир. nginx-acquis (.0)" _crowdsec_drop_anon_acquis
+		# Apache: пакетный setup.apache2.yaml дублировал наш файл (запросы считались дважды)
+		declare -F _crowdsec_drop_anon_acquis >/dev/null && [[ "${WEBSERVER:-nginx}" == "apache" ]] \
+			&& [[ -f /etc/crowdsec/acquis.d/setup.apache2.yaml ]] \
+			&& _upd_run "CrowdSec: убрать дубль чтения логов Apache" _crowdsec_drop_anon_acquis
 		# CAPI: community blocklist — страховка регистрации (если ещё не зарегистрирован)
 		declare -F _crowdsec_capi_register >/dev/null && command -v cscli >/dev/null 2>&1 \
 			&& ! cscli capi status >/dev/null 2>&1 \

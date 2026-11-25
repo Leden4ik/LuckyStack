@@ -241,11 +241,13 @@ if [[ "${1:-}" == "--restore" ]]; then
 	((r_ispc))  && _restore_tar "$SRC/ispconfig.tar.gz" "ISPConfig"
 	if ((r_www)); then
 		# ISPConfig ставит на корни сайтов chattr +i, tar не может выставить им владельца и время.
+		# На Apache так же защищены стартеры fcgid (php-fcgi-scripts/*/.php-fcgi-starter), их tar
+		# не может перезаписать ("Cannot open: File exists").
 		# На время распаковки флаг снимаем и потом возвращаем.
 		immut=()
 		if command -v lsattr >/dev/null 2>&1; then
 			while read -r a d; do [[ "$a" == *i* ]] && immut+=("$d"); done \
-				< <(lsattr -d /var/www/clients/client*/web* 2>/dev/null)
+				< <(lsattr -d /var/www/clients/client*/web* /var/www/php-fcgi-scripts/*/.php-fcgi-starter 2>/dev/null)
 		fi
 		((${#immut[@]})) && chattr -i "${immut[@]}" 2>>"$LOG"
 		_restore_tar "$SRC/www.tar.gz" "/var/www"
