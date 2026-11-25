@@ -588,6 +588,19 @@ if(!is_array($busy) || empty($busy)) {
 			$res($ok ? 'done' : 'error', $m);
 		} elseif($act === 'update' || $act === 'rollback') {
 			mm_start_update($job, $payload);
+		} elseif($act === 'fix_ww') {
+			// снять запись для всех: установщик сам сохраняет прежние права для отката
+			$app->db->query("UPDATE ss_maint_job SET status='running', started=NOW() WHERE id=?", $id);
+			$dir = mm_installer_dir();
+			$prob = mm_installer_problem($dir);
+			if($prob !== '') $res('error', $prob);
+			else {
+				$o = array(); $rc = 0;
+				exec('cd '.escapeshellarg($dir).' && TERM=dumb timeout 600 ./server-setup.sh --fix-world-writable </dev/null 2>&1', $o, $rc);
+				$app->db->query("UPDATE ss_maint_job SET log=? WHERE id=?", mm_clean(implode("\n", $o)), $id);
+				mm_collect();
+				$res($rc === 0 ? 'done' : 'error', $rc === 0 ? 'запись для всех снята, прежние права сохранены' : 'установщик завершился с кодом '.$rc);
+			}
 		} else {
 			$res('error', 'неизвестное действие');
 		}

@@ -1,5 +1,10 @@
 <?php
 $wb['fix_btn_txt'] = 'Исправить';
+$wb['ww_btn_txt'] = 'Убрать запись для всех';
+$wb['ww_confirm_txt'] = 'Снять право записи для всех с найденных файлов в /etc, /usr/local и /var/www? Прежние права сохранятся в /root/luckystack-backups, вернуть: luckyctl fix-world-writable --revert ФАЙЛ.';
+$wb['jail_btn_txt'] = 'В jail: %s';
+$wb['jail_confirm_txt'] = 'Перевести пользователя %s в jail? По SSH ему будет доступен только свой сайт. В jail есть php, composer, node и git, но проверьте после этого его деплой. Вернуть: Sites → Shell users → пользователь → Chroot Shell: None.';
+$wb['jail_done_txt'] = 'Пользователь %s переводится в jail, ISPConfig применит это в течение минуты.';
 $wb['bad_email_txt'] = 'Адрес писем о безопасности некорректен, он не сохранён. Остальные настройки сохранены.';
 $wb['rollback_head_txt'] = 'Откат';
 $wb['rollback_desc_txt'] = 'Вернуть версию, которая стояла до последнего обновления. Повторный откат отменяет его. ISPConfig и базы откатываются вручную из бэкапа.';

@@ -76,6 +76,8 @@ DO_CHANGES=0       # журнал изменений файлов (и выйти
 CHANGES_ARG=""     # для --changes: число шагов или путь к файлу
 DO_MAILREP=0       # репутация почты: PTR, чёрные списки, Spamhaus DBL (и выйти)
 DO_SITES=0         # как отвечают сайты и панель (и выйти)
+DO_WW_FIX=0        # снять запись для всех с файлов /etc, /usr/local, /var/www (и выйти)
+WW_REVERT=""       # для --fix-world-writable: вернуть права из этого файла
 DO_DIAGNOSTICS=0   # собрать обезличенный архив диагностики для поддержки и выйти
 DO_RESTORE=0       # восстановление из резервной копии (интерактивно) и выйти
 DO_UPDATE=0        # режим обновления/патчей (безопасно, без ядра) и выйти
@@ -123,6 +125,7 @@ Flags:
   --changes [N|PATH]  Show which files each installer step changed (last N steps or one file)
   --blacklist     Check mail reputation: PTR, IP blacklists, Spamhaus DBL, and exit
   --sites         Check how every ISPConfig site and the panel respond, and exit
+  --fix-world-writable [--revert FILE]  Remove write-for-all from files in /etc, /usr/local, /var/www (old modes saved), and exit
   --diagnostics    Collect an anonymized diagnostics bundle for support and exit
   --restore        Restore data from a backup (interactive)
   --update         Update/patch mode: update packages + re-apply additive
@@ -170,6 +173,7 @@ LuckyStack v$VERSION, установщик сервера
   --changes [N|ПУТЬ]  Какие файлы менял каждый шаг установщика (последние N шагов или один файл)
   --blacklist     Проверить репутацию почты: PTR, чёрные списки IP, домены в Spamhaus DBL, и выйти
   --sites         Проверить, как отвечают все сайты ISPConfig и панель, и выйти
+  --fix-world-writable [--revert ФАЙЛ]  Снять запись для всех с файлов /etc, /usr/local, /var/www (прежние права сохраняются) и выйти
   --diagnostics    Собрать обезличенный архив диагностики для поддержки и выйти
   --restore        Восстановить данные из резервной копии (интерактивно)
   --update         Режим обновления/патчей: обновить пакеты + переприменить
@@ -210,6 +214,8 @@ while (($#)); do
 		--cve)         DO_SECREL=1 ;;
 		--blacklist)   DO_MAILREP=1 ;;
 		--sites)       DO_SITES=1 ;;
+		--fix-world-writable) DO_WW_FIX=1 ;;
+		--revert)      WW_REVERT="${2:-}"; shift ;;
 		--changes)     DO_CHANGES=1; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then CHANGES_ARG="$2"; shift; fi ;;
 		--plain)       SECREL_PLAIN=1 ;;
 		--diagnostics) DO_DIAGNOSTICS=1 ;;
@@ -233,7 +239,7 @@ done
 # --- Валидация взаимоисключающих режимов/флагов ------------------------------
 # (до загрузки библиотек — поэтому обычный echo, а не ui_*)
 _modes=0
-for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_SITES" "$DO_CHANGES" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
+for _m in "$DO_STATUS" "$DO_HEALTHCHECK" "$DO_SECREL" "$DO_MAILREP" "$DO_SITES" "$DO_WW_FIX" "$DO_CHANGES" "$DO_DIAGNOSTICS" "$DO_RESTORE" "$DO_UPDATE" "$DO_ROLLBACK" "$DO_ADOPT" "$DO_UNINSTALL" "$DO_PHP_REMOVE" "$DO_PHP_ADD" "$DO_TIMEZONE" "$DO_SELF_UPDATE" "$DO_CHECK_UPDATE" "$DO_INSTALL_CODE"; do
 	(( _m )) && (( _modes++ ))
 done
 if (( _modes > 1 )); then
@@ -1644,6 +1650,13 @@ main() {
 			exit $?
 		fi
 		ui_error "lib/mailrep.sh не подключён."; exit 1
+	fi
+
+	# Снять запись для всех (кнопка в панели или luckyctl fix-world-writable [--revert ФАЙЛ])
+	if ((DO_WW_FIX)); then
+		require_root
+		if declare -F run_ww_fix >/dev/null; then ch_run "fix-world-writable" run_ww_fix "$WW_REVERT"; exit $?; fi
+		ui_error "lib/security.sh не подключён."; exit 1
 	fi
 
 	# Как отвечают сайты и панель (нужен root: список сайтов из базы ISPConfig)

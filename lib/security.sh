@@ -376,8 +376,48 @@ _security_world_writable() {
 		printf '%s\n' "$list" | while IFS= read -r f; do [[ -n "$f" ]] && chmod o-w "$f" 2>/dev/null; done
 		ui_success "Права исправлены (снят бит записи для «других»). Отчёт: ${rep}"
 	else
-		ui_info "Только отчёт (исправление выключено). Чтобы исправить: chmod o-w <файл> или SEC_WORLDWRITABLE=fix."
+		ui_info "Только отчёт (исправление выключено). Исправить с сохранением прежних прав: $(ls_hint --fix-world-writable)"
 	fi
+}
+
+# luckyctl fix-world-writable: снять запись для всех с файлов в /etc, /usr/local, /var/www (те же
+# пути, что у аудита). Прежние права сохраняются построчно «права путь» в
+# /root/luckystack-backups/world-writable-ДАТА.txt, вернуть: luckyctl fix-world-writable --revert ФАЙЛ.
+# Запускается и кнопкой в панели (Обслуживание сервера → Состояние → Безопасность).
+run_ww_fix() {
+	local rev="${1:-}" list bk m f n=0
+	# пути и файлы можно подменить (тесты); по умолчанию те же, что у аудита
+	local paths="${WW_SCAN_PATHS:-/etc /usr/local /var/www}" bdir="${WW_BACKUP_DIR:-/root/luckystack-backups}"
+	local rep="${WW_REPORT:-/root/world-writable-files.txt}"
+	if [[ -n "$rev" ]]; then
+		[[ -f "$rev" ]] || { ui_error "Нет файла ${rev}."; return 1; }
+		while read -r m f; do
+			[[ "$m" =~ ^[0-7]{3,4}$ && -e "$f" ]] && chmod "$m" -- "$f" && n=$((n + 1))
+		done <"$rev"
+		ui_success "Права возвращены как были: ${n} файлов (из ${rev})."
+		log "ww-fix: revert ${n} из ${rev}"
+		return 0
+	fi
+	ui_step "Файлы с записью для всех в /etc, /usr/local, /var/www"
+	# shellcheck disable=SC2086  # paths — список каталогов через пробел
+	list="$(find $paths -xdev -type f -perm -0002 ! -type l 2>/dev/null)"
+	if [[ -z "$list" ]]; then
+		: >"$rep"
+		ui_success "Таких файлов нет."
+		return 0
+	fi
+	mkdir -p "$bdir" && chmod 700 "$bdir" || return 1
+	bk="${bdir}/world-writable-$(date +%Y%m%d-%H%M%S).txt"
+	( umask 077; while IFS= read -r f; do [[ -n "$f" ]] && stat -c '%a %n' -- "$f"; done <<<"$list" >"$bk" ) \
+		|| { ui_error "Не удалось сохранить прежние права, ничего не меняю."; return 1; }
+	while IFS= read -r f; do
+		[[ -n "$f" ]] && chmod o-w -- "$f" && n=$((n + 1))
+	done <<<"$list"
+	: >"$rep"   # отчёт аудита теперь пуст, панель перестанет показывать предупреждение
+	ui_success "Снята запись для всех: ${n} файлов. Прежние права сохранены: ${bk}"
+	ui_info "Вернуть как было: $(ls_hint --fix-world-writable) --revert ${bk}"
+	log "ww-fix: o-w ${n} файлов, права в ${bk}"
+	return 0
 }
 
 # Открыть SSH-порт в UFW: только с разрешённых IP (SSH_ALLOW_IPS) либо со всех.

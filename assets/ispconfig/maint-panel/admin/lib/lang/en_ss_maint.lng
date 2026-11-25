@@ -1,5 +1,10 @@
 <?php
 $wb['fix_btn_txt'] = 'Fix';
+$wb['ww_btn_txt'] = 'Remove write-for-all';
+$wb['ww_confirm_txt'] = 'Remove write permission for everyone from the found files in /etc, /usr/local and /var/www? The old modes are saved in /root/luckystack-backups, revert with: luckyctl fix-world-writable --revert FILE.';
+$wb['jail_btn_txt'] = 'Jail: %s';
+$wb['jail_confirm_txt'] = 'Move user %s into a jail? Over SSH only their own site will be reachable. The jail has php, composer, node and git, but check their deploy afterwards. Revert: Sites → Shell users → user → Chroot Shell: None.';
+$wb['jail_done_txt'] = 'User %s is being moved into a jail, ISPConfig applies it within a minute.';
 $wb['bad_email_txt'] = 'The security email address is invalid and was not saved. Other settings were saved.';
 $wb['rollback_head_txt'] = 'Rollback';
 $wb['rollback_desc_txt'] = 'Return the version installed before the last update. Rolling back again undoes it. ISPConfig and databases are restored manually from a backup.';

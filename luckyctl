@@ -37,6 +37,8 @@ luckyctl $(version_of "$SS"), команда LuckyStack
   cve                      вышли ли исправления безопасности для nginx, OpenSSL и PHP
   blacklist                репутация почты: PTR, чёрные списки IP, домены в Spamhaus DBL
   sites                    как отвечают все сайты и панель, что изменилось с прошлой проверки
+  fix-world-writable [--revert ФАЙЛ]
+                           снять запись для всех с файлов /etc, /usr/local, /var/www (прежние права сохраняются)
   changes [N|ПУТЬ]          какие файлы менял каждый шаг установщика (последние N шагов или один файл)
   log [N]                  последние N строк журнала (по умолчанию 50)
   paths                    где лежат код, настройки, состояние и журнал
@@ -122,6 +124,7 @@ case "$cmd" in
 	cve)          run_ss --cve "$@" ;;
 	blacklist)    run_ss --blacklist "$@" ;;
 	sites)        need_root "$cmd"; run_ss --sites "$@" ;;
+	fix-world-writable) need_root "$cmd"; run_ss --fix-world-writable "$@" ;;
 	changes)      need_root "$cmd"; run_ss --changes "$@" ;;
 	diagnostics)  need_root "$cmd"; run_ss --diagnostics "$@" ;;
 	restore)      need_root "$cmd"; run_ss --restore "$@" ;;

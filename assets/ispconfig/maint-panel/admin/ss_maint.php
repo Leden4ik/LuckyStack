@@ -52,10 +52,21 @@ if(ss_is_action()) {
 	$do = ss_post('do');
 	if($busy) {
 		$msg = '<div class="alert alert-info"><b>'.$h(_mL('busy_txt')).'</b></div>';
-	} elseif($do === 'refresh' || $do === 'healthcheck') {
+	} elseif($do === 'refresh' || $do === 'healthcheck' || $do === 'fix_ww') {
 		$queue($do);
 		ss_audit('maint', $do);
 		$busy = true;
+	} elseif($do === 'jail') {
+		// как при правке пользователя в Sites → Shell users: chroot=jailkit через очередь ISPConfig
+		$u = ss_post('user');
+		$r = $app->db->queryOneRecord("SELECT shell_user_id FROM shell_user WHERE username=? AND active='y' AND (chroot='' OR chroot='no')", $u);
+		if(is_array($r) && !empty($r)) {
+			$app->db->datalogUpdate('shell_user', array('chroot' => 'jailkit'), 'shell_user_id', (int)$r['shell_user_id']);
+			// проверки безопасности пересчитаются на ближайшем проходе cron
+			$app->db->query("UPDATE ss_maint_setting SET updated = NOW() - INTERVAL 1 DAY WHERE name='versions'");
+			ss_audit('maint', 'jail', $u);
+			$msg = '<div class="alert alert-success">'.$h(sprintf(_mL('jail_done_txt'), $u)).'</div>';
+		}
 	} elseif($do === 'update') {
 		$items = array_values(array_intersect($ITEMS, preg_split('/[\s,]+/', ss_post('items'), -1, PREG_SPLIT_NO_EMPTY)));
 		if(empty($items)) $msg = '<div class="alert alert-warning">'.$h(_mL('no_items_txt')).'</div>';
@@ -133,8 +144,22 @@ $note = function($c) use ($h) {
 	$t = preg_replace('#(https://[A-Za-z0-9./_-]+)#', '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>', $h($c[2]));
 	return '<br><span class="help-block" style="display:inline">'.$t.'</span>';
 };
-$fix = function($lvl, $text) use ($FIXES, $h) {
+$fix = function($lvl, $text) use ($FIXES, $h, $busy, $can_run) {
 	if($lvl === 'ok') return '';
+	$off = ($busy || !$can_run) ? ' style="opacity:.5;pointer-events:none"' : '';
+	// исправление прямо отсюда: запись для всех снимается заданием root-cron (прежние права сохраняются)
+	if(preg_match('/^Файлов сайтов с записью для всех/u', $text)) {
+		return ' <a href="#" class="btn btn-default btn-xs ss-mt-act" data-do="fix_ww" data-confirm="'.$h(_mL('ww_confirm_txt')).'"'.$off.'>'.$h(_mL('ww_btn_txt')).'</a>';
+	}
+	// каждого shell-пользователя без jail можно перевести в jail отдельной кнопкой
+	if(preg_match('/^Shell-пользователи без jail: (.+)$/u', $text, $m)) {
+		$b = '';
+		foreach(preg_split('/,\s*/', $m[1]) as $u) {
+			if(!preg_match('/^[A-Za-z0-9._-]+$/', $u)) continue;
+			$b .= ' <a href="#" class="btn btn-default btn-xs ss-mt-act" data-do="jail" data-user="'.$h($u).'" data-confirm="'.$h(sprintf(_mL('jail_confirm_txt'), $u)).'"'.$off.'>'.$h(sprintf(_mL('jail_btn_txt'), $u)).'</a>';
+		}
+		return $b;
+	}
 	foreach($FIXES as $re => $u) if(preg_match($re, $text)) return ' <a href="#" class="btn btn-default btn-xs ss-mt-nav" data-u="'.$h($u).'">'.$h(_mL('fix_btn_txt')).'</a>';
 	return '';
 };
@@ -321,7 +346,7 @@ jQuery(function($){
 	var core = <?php echo json_encode($ITEMS_CORE); ?>;
 	var txtRollback = <?php echo json_encode(_mL('rollback_confirm_txt'), JSON_UNESCAPED_UNICODE); ?>;
 	$(document).off('click.mtnav').on('click.mtnav','.ss-mt-nav',function(e){e.preventDefault(); nav($(this).data('u'));});
-	$(document).off('click.mtact').on('click.mtact','.ss-mt-act',function(e){e.preventDefault(); ssAct(self,{do:$(this).data('do')});});
+	$(document).off('click.mtact').on('click.mtact','.ss-mt-act',function(e){e.preventDefault(); var $b=$(this); ssAct(self,{do:$b.data('do'),user:$b.data('user')||''},$b.data('confirm')||'');});
 	$(document).off('click.mttg').on('click.mttg','.ss-mt-toggle',function(e){e.preventDefault(); $('#ss_mt_f'+parseInt($(this).data('i'),10)).toggle();});
 	$('#mt_run').off('click.mt').on('click.mt',function(e){e.preventDefault();
 		var it=[], hasCore=false;

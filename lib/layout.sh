@@ -33,6 +33,7 @@ ls_hint() {
 		--cve)          echo "luckyctl cve" ;;
 		--blacklist)    echo "luckyctl blacklist" ;;
 		--sites)        echo "luckyctl sites" ;;
+		--fix-world-writable) echo "luckyctl fix-world-writable" ;;
 		--changes)      echo "luckyctl changes" ;;
 		--status)       echo "luckyctl status" ;;
 		--diagnostics)  echo "luckyctl diagnostics" ;;
