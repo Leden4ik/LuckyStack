@@ -320,8 +320,9 @@ _secrel_roundcube() {
 }
 
 # Пакеты из сторонних репозиториев стека: в репозитории есть версия новее установленной.
-# PHP проверяется отдельно (_secrel_php), nginx собирается из исходников.
-SECREL_APT_PKGS="${SECREL_APT_PKGS:-rspamd:Rspamd mariadb-server:MariaDB crowdsec:CrowdSec}"
+# PHP проверяется отдельно (_secrel_php), nginx собирается из исходников. Apache из пакетов
+# (дистрибутива или Sury): на nginx-сервере пакета apache2 нет, строка пропускается.
+SECREL_APT_PKGS="${SECREL_APT_PKGS:-apache2:Apache rspamd:Rspamd mariadb-server:MariaDB crowdsec:CrowdSec}"
 _secrel_apt() {
 	local e p name inst cand
 	for e in $SECREL_APT_PKGS; do
@@ -350,7 +351,12 @@ run_security_releases() {
 	for a in "$@"; do [[ "$a" == "--plain" ]] && plain=1; done
 	if ((plain)); then secrel_scan; return 0; fi
 	ui_header "Исправления безопасности"
-	ui_box_top "nginx, OpenSSL, PHP, Roundcube, Rspamd, MariaDB, CrowdSec"
+	# setup.conf в этом режиме не читается: веб-сервер узнаём по установленной программе
+	if ! command -v nginx >/dev/null 2>&1 && command -v apache2ctl >/dev/null 2>&1; then
+		ui_box_top "Apache, PHP, Roundcube, Rspamd, MariaDB, CrowdSec"
+	else
+		ui_box_top "nginx, OpenSSL, PHP, Roundcube, Rspamd, MariaDB, CrowdSec"
+	fi
 	while IFS='|' read -r lvl txt; do
 		case "$lvl" in
 			ok)   ui_box_line "  ${UI_G}✓${UI_NC} ${txt}" ;;

@@ -29,7 +29,8 @@ firewall + Roundcube + ISPConfig. Движок — `server-setup.sh`, на се�
 11. [Типовые сценарии сопровождения](#сценарии)
 12. [Конфигурация (setup.conf)](#конфигурация)
 13. [Удаление](#удаление)
-14. [Заметки/особенности](#заметки)
+14. [Apache](#apache)
+15. [Заметки/особенности](#заметки)
 
 ---
 
@@ -478,7 +479,9 @@ sudo ./server-setup.sh --only nginx
 | Ключ | Значение |
 |---|---|
 | `SERVER_FQDN`, `TIMEZONE` | имя хоста, часовой пояс |
-| `WEBSERVER` | `nginx` / `apache`. Apache в мастере скрыт до выпуска с полной поддержкой: выбор показывается с `LS_APACHE=1` или если сервер уже на Apache; код Apache и `WEBSERVER=apache` в setup.conf работают как раньше |
+| `WEBSERVER` | `nginx` / `apache`. При перенастройке мастер по умолчанию оставляет текущий. Что делается для Apache: [раздел Apache](#apache) |
+| `APACHE_SOURCE` | `distro` (по умолч.) — Apache из Debian/Ubuntu; `sury` — свежий 2.4.x от Sury (`/etc/apt/sources.list.d/apache2-sury.list`, ключ `/etc/apt/trusted.gpg.d/apache2-sury.gpg`; на Ubuntu `ppa:ondrej/apache2`). Список ставится и в `--update` (пункт pkgs). Обратно на `distro` пакеты сами не откатываются (apt не понижает версию) |
+| `APACHE_WAF` | `detect` (по умолч.) — ModSecurity + OWASP CRS только пишут в журнал; `block` — отвечают 403 и банят через CrowdSec; `off` — модуль выключен, пакеты остаются. Меняется в панели (Обслуживание сервера → Настройки), применяется `luckyctl update security` |
 | `NGINX_CHANNEL` | `stable` / `mainline` |
 | `NGINX_AUTO_VERSION` | `y` (по умолч.) — авто-последняя версия; `n` — пин `NGINX_STABLE_VER`/`NGINX_MAINLINE_VER` |
 | `MARIADB_SOURCE` | `official` / `debian` |
@@ -728,6 +731,57 @@ integrity) и **Linux Malware Detect / LMD (maldet)** из upstream-тарбол
 - Установка устойчива: если rfxn.com недоступен — продолжаем с rkhunter (и ClamAV), без LMD; если не
   встало ничего — этап пропускается с предупреждением. E2E на живом сервере: EICAR/rkhunter-warnings →
   `exit 1` + строки в логе; полный скан `/var/www` → 0 заражений.
+
+## Apache
+`WEBSERVER=apache`, код в `lib/apache.sh`. Apache ставится из пакетов (`APACHE_SOURCE`), PHP через
+PHP-FPM (`mod_proxy_fcgi`), MPM event. Пакетные conffiles не правятся: все наши настройки лежат
+отдельными файлами, поэтому unattended-upgrades не спотыкается об изменённые файлы. Каждый файл
+кладёт `_apache_put_conf ИМЯ ФАЙЛ [conf|site] [restart]`: `apache2ctl configtest`, при ошибке
+возвращается прежний файл (новый удаляется и не включается), без изменений Apache не трогается.
+Всё ниже делается при установке и заново в `luckyctl update security` (`_apache_apply_all`).
+
+| Файл | Что внутри |
+|---|---|
+| `conf-available/zz-luckystack-hardening.conf` | всегда: `ServerTokens Prod`, `ServerSignature Off`, `TraceEnable Off`, закрыты скрытые файлы и каталоги кроме `.well-known`. С `HARDEN_CONF_CUSTOM=y`: запрет дампов, `.sql`, `.bak`, `composer.json` и т.п., заголовки X-Content-Type-Options, X-Frame-Options, Referrer-Policy; с `HARDEN_HSTS=y` ещё HSTS на https |
+| `conf-available/zz-luckystack-timeouts.conf` | `NGX_TIGHT_TIMEOUTS=y` (общий ключ с nginx): `Timeout 60`, `KeepAliveTimeout 5`, `RequestReadTimeout` handshake 5, header 15-40, body 60; `ProxyTimeout 300`, чтобы долгий PHP (импорт в phpMyAdmin) не обрывался |
+| `conf-available/zz-luckystack-compress.conf` | brotli (качество 5) для текстовых типов, gzip для клиентов без brotli |
+| `conf-available/zz-luckystack-mpm.conf` | этап tuning: `MaxRequestWorkers` 150/250/400/600 по памяти (до 2/4/8 ГБ и больше), `ThreadsPerChild 25`, `ServerLimit` по ним; меняется только перезапуском |
+| `sites-available/00-luckystack-default.conf` | сайт по умолчанию по `HTTP_IP_POLICY`: landing (`/var/www/html`), redirect (301 на `https://SERVER_FQDN`), deny (403, соединение Apache не рвёт, в отличие от 444 у nginx). Путь ACME доступен всегда. Если включён сайт хоста по FQDN, `http://FQDN` уходит на https. На 443 чужое имя получает 403 с сертификатом сервера (иначе Apache отдавал первый сайт и по сертификату было видно, какие сайты есть). `000-default` пакета выключается |
+| `/etc/modsecurity/zz-luckystack.conf` | WAF (`APACHE_WAF`): `SecRuleEngine DetectionOnly`/`On`, журнал `/var/log/apache2/modsec_audit.log`, тело до 12.5 МБ проверяется частично (`ProcessPartial`), без проверки ответа. Не проверяются порты панели и apps, `/phpmyadmin`, `/roundcube`, `/webmail`, `/pgadmin4`. Включены исключения CRS 3 для WordPress, Drupal, Nextcloud, phpBB |
+
+Подробности, найденные на живом сервере (2026-11-25):
+- **Заголовки без дублей.** Заголовки ставятся как `Header set X "..." "expr=-z resp('X')"`, а не
+  `setifempty`. Заголовки от PHP (FastCGI) и от `Header always` лежат в `err_headers_out`, а `setifempty`
+  смотрит одну таблицу, поэтому получались дубли. `resp()` видит обе таблицы, правила с `always` выполняются
+  раньше наших, правило vhost без `always` идёт после и заменяет наше. На ответах с ошибкой наших заголовков
+  нет, как у nginx с `add_header` без `always`.
+- **brotli.** `deflate.conf` пакета подключается раньше (`mods-enabled` до `conf-enabled`) и ставит DEFLATE
+  первым в цепочку, из-за чего клиент с br получал gzip. Тем, кто принимает br, gzip выключается
+  (`SetEnvIfNoCase Accept-Encoding ... no-gzip`).
+- **Сайт по умолчанию с именем `luckystack-default.invalid`.** Без своего `ServerName` vhost берёт глобальное
+  имя сервера (FQDN) и, будучи первым, перехватывал `https://FQDN` у сайта хоста.
+- **ACME.** ISPConfig кладёт глобальный `Alias /.well-known/acme-challenge` (`999-acme.conf`) в
+  `/usr/local/ispconfig/interface/acme`, он перекрывает DocumentRoot любого сайта. `_hostcert_detect_docroot`
+  находит этот алиас и выпускает сертификат хоста через его каталог.
+- **CrowdSec.** Логи сайтов ISPConfig на Apache пишет vlogger, при `logging=anon` с адресами `.0`, и маску по
+  каталогам сайтов CrowdSec не подхватывает для новых сайтов. Поэтому читается общий лог Debian
+  `other_vhosts_access.log` (`other-vhosts-access-log` включается): туда пишут все vhost без своего CustomLog,
+  то есть все сайты, панель и Roundcube, с реальными IP. Пакетный `setup.apache2.yaml` убирается: он читал те же
+  файлы, и каждый запрос считался дважды.
+- **WAF и CrowdSec.** Сценарий `crowdsecurity/modsecurity` банит по одному срабатыванию правила уровня CRITICAL,
+  даже когда WAF только наблюдает, а пакет CrowdSec ставит эту коллекцию сам, если видит ModSecurity. Поэтому она
+  держится только при `APACHE_WAF=block` (`_apache_waf_crowdsec`, вызывается и после установки CrowdSec). Парсер
+  ModSecurity разбирает строки только с меткой `modsecurity`, поэтому в режиме блокировки `error.log` читается
+  второй раз с этой меткой. Сообщения WAF о сайтах ISPConfig уходят в их собственные `error.log` (их не читаем
+  из-за анонимизации), повторные 403 на этих сайтах CrowdSec видит в общем access-логе (`http-generic-403-bf`).
+- **Плагины Roundcube** ходят в API панели по FQDN, если в vhost панели (nginx или Apache) стоит запрет входа по IP.
+- **Восстановление www.** ISPConfig на Apache ставит `chattr +i` и на стартеры fcgid
+  (`/var/www/php-fcgi-scripts/*/.php-fcgi-starter`), restore снимает и возвращает флаг вместе с корнями сайтов.
+- **Панель обслуживания** на Apache показывает версию Apache, режим WAF и системный OpenSSL, настройку WAF; пунктов
+  пересборки и отката nginx нет. `luckyctl cve` сверяет пакет apache2 с репозиторием. Ограничения systemd для
+  Apache не ставятся: панели ISPConfig нужен suexec.
+- **Заморозка vhost** работает и на Apache (`apache2ctl -t`, откат сломанного текста), проверено вживую.
+- Чего у Apache нет по сравнению с nginx: HTTP/3, zstd, GeoIP2 в веб-сервере, страница статистики VTS.
 
 ## Сверка с гайдом Perfect Server
 Установщик построчно сверен с эталонным гайдом howtoforge (что реализовано, что
@@ -1059,8 +1113,9 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
 - **CrowdSec LAPI** уводится с порта 8080, если на нём панель ISPConfig (иначе агент не стартует).
   При повторном прогоне порт, который слушает сам crowdsec, конфликтом не считается (LAPI не «уезжает»).
 - **CrowdSec по веб-серверу**: коллекция парсера и acquisition выбираются по `WEBSERVER` —
-  nginx (`crowdsecurity/nginx`, логи `/var/log/nginx/*`, `type: nginx`) или apache
-  (`crowdsecurity/apache2`, `/var/log/apache2/*`, `type: apache2`); per-site логи ISPConfig в обоих.
+  nginx (`crowdsecurity/nginx`, `/var/log/nginx/crowdsec.log`, `type: nginx`) или apache
+  (`crowdsecurity/apache2`, `other_vhosts_access.log` + `access.log` + `error.log`, `type: apache2`).
+  Логи отдельных сайтов не читаются ни там, ни там (см. ниже и раздел [Apache](#apache)).
 - **CrowdSec детект почтового брута** (`_crowdsec_enable_mail`, если выбрана почта): коллекции
   `crowdsecurity/postfix` + `crowdsecurity/dovecot` + acquisition `mail-ispconfig.yaml`
   (`/var/log/mail.log`, `type: syslog` — парсеры postfix/dovecot роутятся по имени программы).
@@ -1083,7 +1138,7 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
   (`_ispconfig_crowdsec_shared_migrate`, stage 8.13.1 + `--update` 3.2.7.1): sed переправляет строку
   `access_log` в готовых vhost'ах и рантайм-шаблонах на общий путь **без ISPConfig resync** (уникальные
   директивы/данные сайтов не трогаются) + `nginx -t`/reload + убирает per-site logrotate. Acquisition
-  `web-ispconfig.yaml` для nginx = один файл (для Apache — обычные per-site access, он не анонимизируется). Публичный
+  `web-ispconfig.yaml` для nginx = один файл (для Apache — общий `other_vhosts_access.log`, см. [Apache](#apache)). Публичный
   `access.log` остаётся маскированным (приватность сохранена), CrowdSec/fail2ban видят реальный IP.
   **Важно:** пакет CrowdSec при установке создаёт `acquis.d/setup.nginx.yaml`, читающий
   АНОНИМИЗИРОВАННЫЙ `/var/log/nginx/*.log` (→ баны `.0` + дубль `crowdsec.log`) — `_crowdsec_drop_anon_acquis`

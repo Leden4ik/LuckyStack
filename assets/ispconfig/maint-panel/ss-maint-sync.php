@@ -78,6 +78,7 @@ $SETTINGS = array(
 	'SSH_TCP_FORWARD'      => $ny,
 	'FTP_TLS_REQUIRED'     => $yn,
 	'RC_BRANCH'            => array('1.6', '1.7'),
+	'APACHE_WAF'           => array('detect', 'block', 'off'),
 );
 
 // Модули сборки nginx и директивы конфига, которым они нужны: панель предупредит перед отключением.
@@ -240,10 +241,24 @@ function mm_collect() {
 		&& preg_match('/^VERSION="([^"]+)"/m', (string)file_get_contents($dir.'/server-setup.sh'), $m)) ? $m[1] : '';
 	$v['os'] =mm_sh(". /etc/os-release; echo \"\$PRETTY_NAME\"");
 	$v['kernel'] = mm_sh('uname -r');
-	$nv = mm_sh('nginx -V 2>&1');
-	$v['nginx'] = preg_match('#nginx/([0-9.]+)#', $nv, $m) ? $m[1] : '';
-	$ossl = preg_match('/built with OpenSSL ([0-9.]+)/', $nv, $m) ? $m[1] : '';
-	$v['openssl'] = $ossl;
+	$cf = ($dir !== '') ? mm_conf_read(mm_setup_conf()) : array();
+	// Apache ставится из пакетов: OpenSSL у него системный и обновляется вместе с ОС, поэтому
+	// проверка ветки OpenSSL и пересборка (как у nginx) к нему не относятся.
+	$web = (isset($cf['WEBSERVER']) && $cf['WEBSERVER'] === 'apache') ? 'apache' : 'nginx';
+	mm_set('webserver', $web);
+	$ossl = '';
+	if($web === 'apache') {
+		$av = mm_sh('apache2 -v 2>&1');
+		$v['apache'] = preg_match('#Apache/([0-9.]+)#', $av, $m) ? $m[1].(is_file('/etc/apt/sources.list.d/apache2-sury.list') ? ' (Sury)' : '') : '';
+		$v['openssl'] = preg_match('/OpenSSL ([0-9.]+[a-z]?)/', mm_sh('openssl version'), $m) ? $m[1] : '';
+		$waf = isset($cf['APACHE_WAF']) ? $cf['APACHE_WAF'] : 'detect';
+		$v['waf'] = is_link('/etc/apache2/mods-enabled/security2.load') ? $waf : 'off';
+	} else {
+		$nv = mm_sh('nginx -V 2>&1');
+		$v['nginx'] = preg_match('#nginx/([0-9.]+)#', $nv, $m) ? $m[1] : '';
+		$ossl = preg_match('/built with OpenSSL ([0-9.]+)/', $nv, $m) ? $m[1] : '';
+		$v['openssl'] = $ossl;
+	}
 	$v['mariadb'] = mm_sh("mariadb --version | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+-MariaDB' | head -1");
 	$r = $app->db->queryOneRecord("SELECT dbversion FROM server ORDER BY server_id LIMIT 1");
 	$v['ispconfig'] = (defined('ISPC_APP_VERSION') ? ISPC_APP_VERSION : '').(is_array($r) ? ' (БД '.$r['dbversion'].')' : '');
@@ -254,7 +269,6 @@ function mm_collect() {
 	mm_set('versions', json_encode($v, JSON_UNESCAPED_UNICODE));
 
 	// текущие значения настроек (только разрешённые ключи, секреты сюда не попадают)
-	$cf = ($dir !== '') ? mm_conf_read(mm_setup_conf()) : array();
 	$cur = array();
 	foreach($SETTINGS as $k => $vals) $cur[$k] = (isset($cf[$k]) && in_array($cf[$k], $vals, true)) ? $cf[$k] : $vals[0];
 	mm_set('cfg', json_encode($cur));
@@ -270,9 +284,11 @@ function mm_collect() {
 	mm_set('rollback', json_encode($rb, JSON_UNESCAPED_UNICODE));
 
 	// какие модули реально используются в конфиге nginx
-	$ngx = mm_sh('nginx -T');
 	$used = array();
-	foreach($MODULE_USE as $k => $re) $used[$k] = preg_match('/^\s*('.$re.')\b/m', $ngx) ? 'y' : 'n';
+	if($web === 'nginx') {
+		$ngx = mm_sh('nginx -T');
+		foreach($MODULE_USE as $k => $re) $used[$k] = preg_match('/^\s*('.$re.')\b/m', $ngx) ? 'y' : 'n';
+	}
 	mm_set('module_used', json_encode($used));
 
 	// --- проверки сверх --healthcheck ---
@@ -331,7 +347,9 @@ function mm_collect() {
 		}
 	}
 
-	foreach(array('nginx' => 'nginx', 'mariadb' => 'MariaDB') as $svc => $label) {
+	// Apache не ограничиваем (панели ISPConfig нужен suexec), поэтому и проверку для него не показываем
+	$svcs = ($web === 'apache') ? array('mariadb' => 'MariaDB') : array('nginx' => 'nginx', 'mariadb' => 'MariaDB');
+	foreach($svcs as $svc => $label) {
 		$a = mm_sh('systemd-analyze security '.$svc.'.service --no-pager | tail -1');
 		if(preg_match('/level for [^:]+:\s*([0-9.]+)/', $a, $m)) {
 			$sc = (float)$m[1];

@@ -2189,3 +2189,7 @@ _I18N["CrowdSec: убрать дубль чтения логов Apache"]="Crowd
 # --- Строки интерфейса: установка, проверка, обновление, команды (ноябрь 2026) ---
 # %s в ключе — подставляемое значение (версия, путь, цвет), в переводе на том же месте.
 _I18N["CrowdSec: бан по сообщениям WAF выключен, пока WAF только наблюдает (APACHE_WAF=%s)."]="CrowdSec: banning on WAF messages is off while the WAF only observes (APACHE_WAF=%s)."
+
+# --- Строки интерфейса: установка, проверка, обновление, команды (ноябрь 2026) ---
+# %s в ключе — подставляемое значение (версия, путь, цвет), в переводе на том же месте.
+_I18N["Apache — классический; ставится из пакетов, поддержка .htaccess, WAF ModSecurity — ставится быстрее"]="Apache: classic; installed from packages, supports .htaccess, ModSecurity WAF, installs faster"

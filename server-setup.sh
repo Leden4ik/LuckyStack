@@ -390,36 +390,32 @@ run_wizard() {
 	config_set UI_LANG "${UI_LANG:-ru}"
 
 	# --- Веб-сервер ---
-	# Apache в мастере скрыт до выпуска с полноценной поддержкой (усиление, WAF, тюнинг).
-	# Код Apache на месте: выбор показывается с LS_APACHE=1 (наши тесты) и на сервере,
-	# который уже стоит на Apache (перенастройка не должна молча сменить веб-сервер).
-	if [[ "${LS_APACHE:-0}" == 1 || "${WEBSERVER:-}" == apache ]]; then
-		ui_box_top "Веб-сервер"
-		ui_box_line "Оба варианта работают с ISPConfig и PHP-FPM. Не уверены — выберите nginx."
-		ui_box_bottom
-		ui_menu "Выбор веб-сервера" 1 \
-			"nginx  — быстрый, современный; собирается из исходников (HTTP/3, Brotli) — ставится дольше" \
-			"Apache — классический, проще; ставится из пакетов, поддержка .htaccess — ставится быстрее"
-		case "$UI_MENU_CHOICE" in
-			1) config_set WEBSERVER nginx ;;
-			2) config_set WEBSERVER apache ;;
-		esac
-	else
-		config_set WEBSERVER nginx
-		ui_info "Веб-сервер: nginx, собирается из исходников (HTTP/3, Brotli)."
-	fi
+	# При перенастройке по умолчанию остаётся текущий: Enter не должен молча сменить веб-сервер.
+	ui_box_top "Веб-сервер"
+	ui_box_line "Оба варианта работают с ISPConfig и PHP-FPM. Не уверены — выберите nginx."
+	ui_box_bottom
+	local _ws_def=1; [[ "${WEBSERVER:-}" == apache ]] && _ws_def=2
+	ui_menu "Выбор веб-сервера" "$_ws_def" \
+		"nginx  — быстрый, современный; собирается из исходников (HTTP/3, Brotli) — ставится дольше" \
+		"Apache — классический; ставится из пакетов, поддержка .htaccess, WAF ModSecurity — ставится быстрее"
+	case "$UI_MENU_CHOICE" in
+		1) config_set WEBSERVER nginx ;;
+		2) config_set WEBSERVER apache ;;
+	esac
 
 	# --- Apache: откуда ставить ---
 	if [[ "$WEBSERVER" == "apache" ]]; then
 		local _os_name="Debian"; [[ "${OS_ID:-debian}" == "ubuntu" ]] && _os_name="Ubuntu"
-		ui_menu "Откуда ставить Apache" 1 \
+		local _src_def=1; [[ "${APACHE_SOURCE:-}" == sury ]] && _src_def=2
+		ui_menu "Откуда ставить Apache" "$_src_def" \
 			"Из ${_os_name} — версия дистрибутива, исправления безопасности приходят с обновлениями системы (рекомендуется)" \
 			"Свежий от Sury (packages.sury.org) — последняя 2.4.x раньше, чем в дистрибутиве"
 		case "$UI_MENU_CHOICE" in
 			2) config_set APACHE_SOURCE sury ;;
 			*) config_set APACHE_SOURCE distro ;;
 		esac
-		ui_menu "WAF для сайтов (ModSecurity + OWASP CRS)" 1 \
+		local _waf_def=1; case "${APACHE_WAF:-}" in block) _waf_def=2 ;; off) _waf_def=3 ;; esac
+		ui_menu "WAF для сайтов (ModSecurity + OWASP CRS)" "$_waf_def" \
 			"Наблюдение — записывает, что остановил бы, ничего не блокирует (рекомендуется для начала)" \
 			"Блокировка — останавливает атаки; на некоторых сайтах возможны ложные срабатывания" \
 			"Не ставить"

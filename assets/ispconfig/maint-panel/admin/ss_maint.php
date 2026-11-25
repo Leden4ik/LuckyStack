@@ -31,8 +31,25 @@ $SET_GROUPS = array(
 	'set_group_nginx_txt'    => array('OPENSSL_BRANCH' => array('3.5', '4.1', '4.0'), 'NGINX_CHANNEL' => array('stable', 'mainline'),
 		'NGX_BROTLI' => 0, 'NGX_ZSTD' => 0, 'NGX_ZLIBNG' => 0, 'NGX_HEADERMOD' => 0, 'NGX_CACHEPURGE' => 0, 'NGX_SETMISC' => 0, 'NGX_VTS' => 0, 'NGX_JEMALLOC' => 0, 'NGX_NATIVE_OPT' => 0,
 		'NGX_QUIC_GSO' => 0, 'NGX_QUIC_RETRY' => 0),
+	'set_group_apache_txt'   => array('APACHE_WAF' => array('detect', 'block', 'off')),
 	'set_group_security_txt' => array('NGX_TIGHT_TIMEOUTS' => 0, 'SEC_SERVICE_HARDEN' => 0, 'SEC_AUTO_UPDATES_3RD' => 0, 'SEC_USERNS_OFF' => 0, 'SSH_TCP_FORWARD' => 0, 'FTP_TLS_REQUIRED' => 0, 'RC_BRANCH' => array('1.6', '1.7')),
 );
+// Веб-сервер (пишет ss-maint-sync.php): на Apache нет сборки и отката nginx, и его настроек тоже
+$web = 'nginx';
+$_w = $app->db->queryOneRecord("SELECT value FROM ss_maint_setting WHERE name='webserver'");
+if(is_array($_w) && isset($_w['value']) && $_w['value'] === 'apache') $web = 'apache';
+if($web === 'apache') {
+	unset($SET_GROUPS['set_group_nginx_txt']);
+	$ITEMS = array_values(array_diff($ITEMS, array('nginx')));
+	$ITEMS_CORE = array_values(array_diff($ITEMS_CORE, array('nginx')));
+} else {
+	unset($SET_GROUPS['set_group_apache_txt']);
+}
+$RB_TARGETS = ($web === 'apache') ? array('roundcube') : array('nginx', 'roundcube');
+// подписи значений в списках (если нет перевода, показывается само значение)
+// строка с вариантом для веб-сервера: 'x_txt' → 'x_apache_txt', если такой перевод есть
+$mLw = function($k) use ($web) { $a = preg_replace('/_txt$/', '_'.$web.'_txt', $k); return (_mL($a) !== $a) ? _mL($a) : _mL($k); };
+$VAL_LABEL = function($k, $o) { $t = _mL('val_'.$k.'_'.$o.'_txt'); return ($t === 'val_'.$k.'_'.$o.'_txt') ? $o : $t; };
 
 $TABS = array('overview', 'update', 'changes', 'settings', 'audit');
 $tab = isset($_GET['tab']) ? (string)$_GET['tab'] : 'overview';
@@ -77,7 +94,7 @@ if(ss_is_action()) {
 		}
 	} elseif($do === 'rollback') {
 		$target = ss_post('target');
-		if(in_array($target, array('nginx', 'roundcube'), true)) {
+		if(in_array($target, $RB_TARGETS, true)) {
 			$queue('rollback', array('target' => $target));
 			ss_audit('maint', 'rollback', $target);
 			$busy = true;
@@ -173,8 +190,9 @@ if($tab === 'overview') {
 
 	$v = $J('versions');
 	echo '<table class="table" style="max-width:820px"><tbody>';
-	foreach(array('luckystack', 'os', 'kernel', 'nginx', 'openssl', 'php', 'php_default', 'mariadb', 'ispconfig', 'roundcube', 'uptime') as $k) {
-		if(!empty($v[$k])) echo '<tr><th style="width:240px">'.$h(_mL('ver_'.$k.'_txt')).'</th><td>'.$h($v[$k]).'</td></tr>';
+	foreach(array('luckystack', 'os', 'kernel', 'nginx', 'apache', 'waf', 'openssl', 'php', 'php_default', 'mariadb', 'ispconfig', 'roundcube', 'uptime') as $k) {
+		$vk = 'ver_'.$k.'_'.$web.'_txt'; if(_mL($vk) === $vk) $vk = 'ver_'.$k.'_txt';
+		if(!empty($v[$k])) echo '<tr><th style="width:240px">'.$h(_mL($vk)).'</th><td>'.$h($k === 'waf' ? $VAL_LABEL('APACHE_WAF', $v[$k]) : $v[$k]).'</td></tr>';
 	}
 	if($g('installer_dir') !== '') echo '<tr><th>'.$h(_mL('installer_txt')).'</th><td><code>'.$h($g('installer_dir')).'</code> ('.$h($g('installer_date')).')</td></tr>';
 	echo '</tbody></table>';
@@ -194,7 +212,7 @@ if($tab === 'overview') {
 	// Исправления безопасности и репутация почты: все строки, вместе с «в порядке»
 	$fx = array();
 	foreach($FIX_GROUPS as $gn) if(!empty($hc['groups'][$gn])) $fx[$gn] = $hc['groups'][$gn];
-	echo '<h3>'.$h(_mL('fixes_head_txt')).'</h3><p class="help-block">'.$h(_mL('fixes_desc_txt')).'</p>';
+	echo '<h3>'.$h(_mL('fixes_head_txt')).'</h3><p class="help-block">'.$h($mLw('fixes_desc_txt')).'</p>';
 	if(empty($fx)) echo '<p class="help-block">'.$h(_mL('no_data_txt')).'</p>';
 	else {
 		echo '<table class="table" style="max-width:820px"><colgroup><col style="width:28px"><col></colgroup><tbody>';
@@ -235,14 +253,14 @@ if($tab === 'update') {
 		if($i === 'pkgs' && $apt !== '' && (int)$apt > 0) echo ' <span class="label label-warning">'.(int)$apt.'</span>';
 		echo '<br><span class="help-block" style="display:inline">'.$h(_mL('item_'.$i.'_hint_txt')).'</span></label></div>';
 	}
-	echo '<div class="alert alert-warning">'.$h(_mL('update_warn_txt')).'</div>';
+	echo '<div class="alert alert-warning">'.$h($mLw('update_warn_txt')).'</div>';
 	echo '<a href="#" class="btn btn-default formbutton-success" id="mt_run"'.$dis.'>'.$h(_mL('update_btn_txt')).'</a>';
 	echo '</div>';
 
 	$rb = $J('rollback');
 	echo '<h3>'.$h(_mL('rollback_head_txt')).'</h3><p>'.$h(_mL('rollback_desc_txt')).'</p>';
 	echo '<table class="table" style="max-width:820px"><tbody>';
-	foreach(array('nginx', 'roundcube') as $t) {
+	foreach($RB_TARGETS as $t) {
 		echo '<tr><th style="width:140px">'.$h(_mL('rollback_'.$t.'_txt')).'</th><td>';
 		if(!empty($rb[$t])) echo $h(_mL('rollback_to_txt')).' '.$h($rb[$t]).'</td><td style="width:120px"><a href="#" class="btn btn-default btn-sm ss-mt-rollback" data-t="'.$h($t).'"'.$dis.'>'.$h(_mL('rollback_btn_txt')).'</a>';
 		else echo '<span class="help-block" style="display:inline">'.$h(_mL('rollback_none_txt')).'</span></td><td>';
@@ -302,19 +320,21 @@ if($tab === 'settings') {
 	$cfg = $J('cfg');
 	$used = $J('module_used');
 	echo '<p>'.$h(_mL('settings_desc_txt')).'</p>';
-	echo '<div class="alert alert-info">'.$h(_mL('settings_apply_txt')).'</div>';
+	echo '<div class="alert alert-info">'.$h($mLw('settings_apply_txt')).'</div>';
 	foreach($SET_GROUPS as $gl => $keys) {
 		echo '<h3>'.$h(_mL($gl)).'</h3><table class="table" style="max-width:820px"><tbody>';
 		foreach($keys as $k => $vals) {
 			$cur = isset($cfg[$k]) ? $cfg[$k] : '';
-			echo '<tr><td style="width:300px"><b>'.$h(_mL('set_'.$k.'_txt')).'</b><br><span class="help-block" style="display:inline">'.$h(_mL('set_'.$k.'_hint_txt')).'</span>';
+			// у некоторых настроек на Apache своя подпись (set_KEY_apache_txt), если она есть
+			$lk = function($s) use ($k, $web) { $a = 'set_'.$k.'_'.$web.$s; return (_mL($a) !== $a) ? _mL($a) : _mL('set_'.$k.$s); };
+			echo '<tr><td style="width:300px"><b>'.$h($lk('_txt')).'</b><br><span class="help-block" style="display:inline">'.$h($lk('_hint_txt')).'</span>';
 			if(isset($used[$k]) && $used[$k] === 'y') echo '<br><span class="text-warning">'.$h(_mL('module_in_use_txt')).'</span>';
 			elseif(isset($used[$k]) && $cur === 'y') echo '<br><span class="help-block" style="display:inline">'.$h(_mL('module_unused_txt')).'</span>';
 			echo '</td><td>';
 			echo '<select class="form-control ss-mt-set" data-k="'.$h($k).'" style="width:auto">';
 			$opts = is_array($vals) ? $vals : array('y', 'n');
 			foreach($opts as $o) {
-				$label = is_array($vals) ? $o : _mL($o === 'y' ? 'on_txt' : 'off_txt');
+				$label = is_array($vals) ? $VAL_LABEL($k, $o) : _mL($o === 'y' ? 'on_txt' : 'off_txt');
 				echo '<option value="'.$h($o).'"'.($o === $cur ? ' selected' : '').'>'.$h($label).'</option>';
 			}
 			echo '</select></td></tr>';
@@ -342,7 +362,7 @@ jQuery(function($){
 	function nav(u){ if(typeof loadContent==='function')loadContent(u); else if(typeof ISPConfig!=='undefined'&&ISPConfig.loadContent)ISPConfig.loadContent(u); }
 	var self = <?php echo json_encode($page.'?tab='.$tab); ?>;
 	var txtUpdate = <?php echo json_encode(_mL('update_confirm_txt'), JSON_UNESCAPED_UNICODE); ?>;
-	var txtCore = <?php echo json_encode(_mL('update_core_confirm_txt'), JSON_UNESCAPED_UNICODE); ?>;
+	var txtCore = <?php echo json_encode($mLw('update_core_confirm_txt'), JSON_UNESCAPED_UNICODE); ?>;
 	var core = <?php echo json_encode($ITEMS_CORE); ?>;
 	var txtRollback = <?php echo json_encode(_mL('rollback_confirm_txt'), JSON_UNESCAPED_UNICODE); ?>;
 	$(document).off('click.mtnav').on('click.mtnav','.ss-mt-nav',function(e){e.preventDefault(); nav($(this).data('u'));});
