@@ -419,6 +419,15 @@ run_wizard() {
 			2) config_set APACHE_SOURCE sury ;;
 			*) config_set APACHE_SOURCE distro ;;
 		esac
+		ui_menu "WAF для сайтов (ModSecurity + OWASP CRS)" 1 \
+			"Наблюдение — записывает, что остановил бы, ничего не блокирует (рекомендуется для начала)" \
+			"Блокировка — останавливает атаки; на некоторых сайтах возможны ложные срабатывания" \
+			"Не ставить"
+		case "$UI_MENU_CHOICE" in
+			2) config_set APACHE_WAF block ;;
+			3) config_set APACHE_WAF off ;;
+			*) config_set APACHE_WAF detect ;;
+		esac
 	fi
 
 	# --- nginx: канал + профиль сборки + модули ---

@@ -2163,3 +2163,18 @@ _I18N["Подпись %s не проверяется (NGX_VERIFY_SIG=n в setup.
 _I18N["Репозиторий Apache от Sury отключён (APACHE_SOURCE=distro). Установленная версия останется до переустановки пакета."]="The Sury Apache repository is removed (APACHE_SOURCE=distro). The installed version stays until the package is reinstalled."
 _I18N["Свежий от Sury (packages.sury.org) — последняя 2.4.x раньше, чем в дистрибутиве"]="Fresh from Sury (packages.sury.org): the latest 2.4.x before the distribution gets it"
 _I18N["актуален: %s %s"]="up to date: %s %s"
+
+# --- Строки интерфейса: установка, проверка, обновление, команды (ноябрь 2026) ---
+# %s в ключе — подставляемое значение (версия, путь, цвет), в переводе на том же месте.
+_I18N["APACHE_WAF=%s: не понимаю, оставляю наблюдение (detect)."]="APACHE_WAF=%s: unknown value, keeping detection mode (detect)."
+_I18N["Apache: WAF блокирует атаки (ModSecurity + OWASP CRS). Журнал: /var/log/apache2/modsec_audit.log"]="Apache: the WAF blocks attacks (ModSecurity + OWASP CRS). Log: /var/log/apache2/modsec_audit.log"
+_I18N["Apache: WAF в режиме наблюдения, ничего не блокирует. Что он бы остановил: /var/log/apache2/modsec_audit.log"]="Apache: the WAF is in detection mode and blocks nothing. What it would have stopped: /var/log/apache2/modsec_audit.log"
+_I18N["Apache: WAF выключен (APACHE_WAF=off), пакеты оставлены."]="Apache: the WAF is off (APACHE_WAF=off), the packages are kept."
+_I18N["Apache: configtest не принял настройки WAF, оставил как было (%s)."]="Apache: configtest rejected the WAF settings, left them as they were (%s)."
+_I18N["WAF для сайтов (ModSecurity + OWASP CRS)"]="WAF for sites (ModSecurity + OWASP CRS)"
+_I18N["WAF: пакеты ModSecurity не установились."]="WAF: the ModSecurity packages did not install."
+_I18N["[dry-run]%s Apache WAF (ModSecurity + OWASP CRS): %s"]="[dry-run]%s Apache WAF (ModSecurity + OWASP CRS): %s"
+_I18N["[dry-run]%s усиление, таймауты, brotli, сайт по умолчанию (%s), WAF (%s)"]="[dry-run]%s hardening, timeouts, brotli, default site (%s), WAF (%s)"
+_I18N["Блокировка — останавливает атаки; на некоторых сайтах возможны ложные срабатывания"]="Blocking: stops attacks; some sites may get false positives"
+_I18N["Наблюдение — записывает, что остановил бы, ничего не блокирует (рекомендуется для начала)"]="Detection: logs what it would have stopped, blocks nothing (recommended to start with)"
+_I18N["Не ставить"]="Don't install"

@@ -33,7 +33,7 @@ stage_apache() {
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
 		ui_info "${UI_D}[dry-run]${UI_NC} a2enmod (suexec rewrite ssl actions include dav headers proxy_fcgi setenvif http2 brotli reqtimeout mpm_event)"
-		ui_info "${UI_D}[dry-run]${UI_NC} усиление, таймауты, brotli, сайт по умолчанию (${HTTP_IP_POLICY:-landing})"
+		ui_info "${UI_D}[dry-run]${UI_NC} усиление, таймауты, brotli, сайт по умолчанию (${HTTP_IP_POLICY:-landing}), WAF (${APACHE_WAF:-detect})"
 		ui_info "${UI_D}[dry-run]${UI_NC} systemctl enable --now apache2"
 		ui_success "Apache (имитация) установлен."
 		return 0
@@ -56,7 +56,7 @@ stage_apache() {
 }
 
 stage_apache_summary() {
-	echo "Apache: $(_apache_version) из ${APACHE_SOURCE:-distro}, FPM через mod_proxy_fcgi, по IP: ${HTTP_IP_POLICY:-landing}"
+	echo "Apache: $(_apache_version) из ${APACHE_SOURCE:-distro}, FPM через mod_proxy_fcgi, по IP: ${HTTP_IP_POLICY:-landing}, WAF: ${APACHE_WAF:-detect}"
 }
 
 # Версия установленного Apache (2.4.62) или «не установлен».
@@ -159,7 +159,81 @@ _apache_apply_all() {
 	_apache_timeouts
 	_apache_compress
 	_apache_default_vhost
+	_apache_waf
 	return 0
+}
+
+# --- WAF: ModSecurity + OWASP CRS ----------------------------------------------
+# APACHE_WAF=detect (по умолчанию) — только запись в журнал, ничего не блокирует: сначала стоит
+# посмотреть, на что срабатывает. block — блокировка (оценка аномалий CRS, порог 5). off — выключен.
+# Пакеты дистрибутива: libapache2-mod-security2 и modsecurity-crs (Debian 12 — CRS 3.3).
+# Не проверяются: панель ISPConfig и apps-vhost (свои порты), /phpmyadmin, /roundcube, /webmail,
+# /pgadmin4 — служебные инструменты за паролем, на них у CRS много ложных срабатываний (текст писем,
+# SQL в phpMyAdmin). Большие загрузки не обрываются: тело сверх лимита проверяется частично.
+# Наши настройки — /etc/modsecurity/zz-luckystack.conf, грузится после modsecurity.conf и до CRS.
+# В режиме block CrowdSec (если стоит) банит адреса, которые WAF остановил (коллекция modsecurity).
+_apache_waf() {
+	local mode="${APACHE_WAF:-detect}" dir="${MODSEC_DIR:-/etc/modsecurity}"
+	case "$mode" in detect|block|off) ;; *) ui_warn "APACHE_WAF=${mode}: не понимаю, оставляю наблюдение (detect)."; mode=detect ;; esac
+	if [[ "${DRY_RUN:-0}" == "1" ]]; then
+		ui_info "${UI_D}[dry-run]${UI_NC} Apache WAF (ModSecurity + OWASP CRS): ${mode}"
+		return 0
+	fi
+	command -v apache2ctl >/dev/null 2>&1 || return 0
+	if [[ "$mode" == off ]]; then
+		if [[ -e "${APACHE_ETC}/mods-enabled/security2.load" ]]; then
+			a2dismod -q security2 >>"$SETUP_LOG" 2>&1
+			apache2ctl configtest >>"$SETUP_LOG" 2>&1 && systemctl reload apache2 >>"$SETUP_LOG" 2>&1
+			ui_info "Apache: WAF выключен (APACHE_WAF=off), пакеты оставлены."
+		fi
+		return 0
+	fi
+	if [[ ! -f "${APACHE_ETC}/mods-available/security2.load" ]]; then
+		apt_install libapache2-mod-security2 modsecurity-crs || { ui_warn "WAF: пакеты ModSecurity не установились."; return 1; }
+	fi
+	mkdir -p "$dir"
+	[[ -f "$dir/modsecurity.conf" ]] || cp "$dir/modsecurity.conf-recommended" "$dir/modsecurity.conf" 2>/dev/null
+	local engine=DetectionOnly; [[ "$mode" == block ]] && engine=On
+	local pp="${ISPCONFIG_PANEL_PORT:-8080}" ap="${ISPCONFIG_APPS_PORT:-8081}" t prev=""
+	t="$(mktemp)"
+	cat >"$t" <<CONF
+# luckystack: режим WAF и исключения (APACHE_WAF=${mode}). Пересоздаётся при luckyctl update.
+SecRuleEngine ${engine}
+SecAuditEngine RelevantOnly
+SecAuditLog /var/log/apache2/modsec_audit.log
+SecAuditLogParts ABIJDEFHZ
+# большое тело проверяется частично, а не отклоняется (загрузки файлов, импорт баз)
+SecRequestBodyLimit 13107200
+SecRequestBodyNoFilesLimit 1048576
+SecRequestBodyLimitAction ProcessPartial
+SecResponseBodyAccess Off
+
+# панель ISPConfig и apps-vhost не проверяем
+SecRule SERVER_PORT "@rx ^(${pp}|${ap})\$" "id:1009001,phase:1,pass,nolog,ctl:ruleEngine=Off"
+# служебные инструменты за паролем: у CRS на них много ложных срабатываний
+SecRule REQUEST_URI "@rx ^/(phpmyadmin|roundcube|webmail|pgadmin4)(/|\$)" "id:1009002,phase:1,pass,nolog,ctl:ruleEngine=Off"
+# готовые исключения CRS 3 для популярных движков (в CRS 4 их заменили плагины, там строка ничего не делает)
+SecAction "id:1009003,phase:1,pass,nolog,setvar:tx.crs_exclusions_wordpress=1,setvar:tx.crs_exclusions_drupal=1,setvar:tx.crs_exclusions_nextcloud=1,setvar:tx.crs_exclusions_phpbb=1"
+CONF
+	local f="$dir/zz-luckystack.conf"
+	if [[ -f "$f" ]] && cmp -s "$t" "$f" && [[ -e "${APACHE_ETC}/mods-enabled/security2.load" ]]; then rm -f "$t"; return 0; fi
+	[[ -f "$f" ]] && { prev="$(mktemp)"; cp -a "$f" "$prev"; }
+	install -m 644 "$t" "$f"; rm -f "$t"
+	a2enmod -q security2 >>"$SETUP_LOG" 2>&1
+	if ! apache2ctl configtest >>"$SETUP_LOG" 2>&1; then
+		if [[ -n "$prev" ]]; then mv -f "$prev" "$f"; else rm -f "$f"; a2dismod -q security2 >>"$SETUP_LOG" 2>&1; fi
+		ui_warn "Apache: configtest не принял настройки WAF, оставил как было (${SETUP_LOG})."
+		return 1
+	fi
+	rm -f "$prev"
+	systemctl reload apache2 >>"$SETUP_LOG" 2>&1 || true
+	if [[ "$mode" == block ]]; then
+		command -v cscli >/dev/null 2>&1 && cscli collections install crowdsecurity/modsecurity >>"$SETUP_LOG" 2>&1 \
+			&& systemctl reload crowdsec >>"$SETUP_LOG" 2>&1
+		ui_success "Apache: WAF блокирует атаки (ModSecurity + OWASP CRS). Журнал: /var/log/apache2/modsec_audit.log"
+	else
+		ui_success "Apache: WAF в режиме наблюдения, ничего не блокирует. Что он бы остановил: /var/log/apache2/modsec_audit.log"
+	fi
 }
 
 # --- Усиление ------------------------------------------------------------------

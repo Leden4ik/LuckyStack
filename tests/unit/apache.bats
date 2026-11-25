@@ -17,8 +17,14 @@ setup() {
 	a2disconf() { [[ "$1" == -q ]] && shift; rm -f "$APACHE_ETC/conf-enabled/$1.conf"; }
 	a2ensite()  { [[ "$1" == -q ]] && shift; ln -sf "../sites-available/$1.conf" "$APACHE_ETC/sites-enabled/$1.conf"; }
 	a2dissite() { [[ "$1" == -q ]] && shift; rm -f "$APACHE_ETC/sites-enabled/$1.conf"; }
-	a2enmod()   { :; }
+	# модули: включение = ссылка в mods-enabled (WAF смотрит на неё)
+	a2enmod()   { local m; for m in "$@"; do [[ "$m" == -q ]] || ln -sf "../mods-available/$m.load" "$APACHE_ETC/mods-enabled/$m.load"; done; }
+	a2dismod()  { local m; for m in "$@"; do [[ "$m" == -q ]] || rm -f "$APACHE_ETC/mods-enabled/$m.load"; done; }
+	apt_install() { echo "apt $*" >>"$CALLS"; }
 	make-ssl-cert() { :; }
+	export MODSEC_DIR="$T/modsecurity"; mkdir -p "$MODSEC_DIR"
+	echo "SecRuleEngine DetectionOnly" >"$MODSEC_DIR/modsecurity.conf-recommended"
+	touch "$APACHE_ETC/mods-available/security2.load"
 	apache2ctl() { ! grep -Rqs BROKEN "$APACHE_ETC"/conf-enabled/ "$APACHE_ETC"/sites-enabled/; }
 	systemctl() { echo "systemctl $*" >>"$CALLS"; }
 }
@@ -126,4 +132,27 @@ setup() {
 	f="$APACHE_ETC/sites-available/00-luckystack-default.conf"
 	grep -q 'RewriteCond %{HTTP_HOST} ^srv\\.example\\.org(:80)?\$ \[NC\]' "$f"
 	grep -q 'https://srv.example.org/\$1 \[R=301,L\]' "$f"
+}
+
+@test "WAF: наблюдение по умолчанию, исключены порты панели и служебные пути" {
+	ISPCONFIG_PANEL_PORT=8443 _apache_waf
+	f="$MODSEC_DIR/zz-luckystack.conf"
+	grep -qx "SecRuleEngine DetectionOnly" "$f"
+	grep -q '^SecRule SERVER_PORT "@rx ^(8443|8081)\$"' "$f"
+	grep -q 'phpmyadmin|roundcube' "$f"
+	grep -qx "SecRequestBodyLimitAction ProcessPartial" "$f"
+	[ -f "$MODSEC_DIR/modsecurity.conf" ]
+	[ -L "$APACHE_ETC/mods-enabled/security2.load" ]
+}
+
+@test "WAF: блокировка включает SecRuleEngine On, off выключает модуль" {
+	APACHE_WAF=block _apache_waf
+	grep -qx "SecRuleEngine On" "$MODSEC_DIR/zz-luckystack.conf"
+	APACHE_WAF=off _apache_waf
+	[ ! -e "$APACHE_ETC/mods-enabled/security2.load" ]
+}
+
+@test "WAF: непонятный режим превращается в наблюдение" {
+	APACHE_WAF=strict _apache_waf
+	grep -qx "SecRuleEngine DetectionOnly" "$MODSEC_DIR/zz-luckystack.conf"
 }
