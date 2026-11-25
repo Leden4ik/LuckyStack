@@ -1,0 +1,21 @@
+Ключи, которыми проверяются подписи исходников при сборке nginx (lib/nginx.sh, _ngx_verify).
+Формат: двоичная связка ключей для gpgv. Посмотреть: gpg --show-keys assets/keys/nginx.gpg
+
+nginx.gpg, с https://nginx.org/en/pgp_keys.html (ключи разработчиков, которые подписывают выпуски):
+  43387825DDB1BB97EC36BA5D007C8D7C15D87369  Roman Arutyunyan
+  D6786CE303D9A9022998DC6CC8464D549AF75C0A  Sergey Kandaurov
+  AC50DD4E7CD5D51FD00D1F4C4DB15B66AA75322B  Sai Krishna Kumar Reddy Yadamakanti
+  13C82A63B603576156E30A4EA0EA981B66B0D967  Konstantin Pavlov
+
+openssl.gpg, из https://openssl-library.org/source/pubkeys.asc, отпечатки сверены с
+https://github.com/openssl/openssl/blob/master/doc/fingerprints.txt:
+  B146647E45A7B33947AB226B2A2C87D161692D40  OpenSSL (текущий)
+  BA5473A2B0587B07FB27CF2D216094DFD0CB81EF  OpenSSL (прежний)
+
+pcre2.gpg, с keys.openpgp.org, отпечаток из
+https://github.com/PCRE2Project/pcre2/blob/master/SECURITY.md (выпуски с 10.45):
+  A95536204A3BB489715231282A98E77EB6F24CA8  Nicholas Wilson
+
+Если проект сменит ключ, сборка остановится на проверке подписи. Тогда новый ключ берётся
+из того же источника, отпечаток сверяется и связка пересобирается:
+  gpg --export --export-options export-minimal ОТПЕЧАТОК... > assets/keys/ПРОЕКТ.gpg

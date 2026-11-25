@@ -25,8 +25,29 @@
 # ngx_cache_purge: поддерживаемый форк github.com/nginx-modules/ngx_cache_purge (оригинал FRiCKLE
 # не менялся с 2014 года). Берём выпуск, а не последний коммит: у форка бывают предварительные 4.x.
 : "${CACHEPURGE_VER:=3.0.4}"
-# Прим.: headers-more, brotli, zstd, set-misc, vts тянутся git-ом
-# (latest), поэтому версии для них здесь НЕ задаются.
+
+# --- Проверка исходников -------------------------------------------------------
+# Сборка идёт от root, поэтому чужой код в неё попасть не должен.
+# nginx, OpenSSL и PCRE2: версия определяется сама, проверяется подпись автора (gpgv, ключи в
+# assets/keys/<проект>.gpg, отпечатки и откуда взяты в assets/keys/README). Остальные архивы
+# с закреплённой версией: sha256 ниже. Git-модули: закреплённый коммит.
+# Новые значения: tools/nginx-pins.sh. NGX_VERIFY_SIG=n в setup.conf отключает проверку подписей
+# (только если проект сменил ключ, а LuckyStack ещё не обновлён).
+declare -gA NGX_TAR_SHA256=(
+	[ngx_cache_purge-3.0.4]=d9eefad55c1306af5a9d22d75743240ffb6c6351152c6893fa6144867d7f9087
+	[ngx_devel_kit-0.3.4]=14a28063294f645d457b1eb10e3c23bbba44398f1c5f021421b58b6f8ab31662
+	[zlib-ng-2.3.3]=f9c65aa9c852eb8255b636fd9f07ce1c406f061ec19a2e7d508b318ca0c907d1
+	[ngx_http_geoip2_module-3.4]=ad72fc23348d715a330994984531fab9b3606e160483236737f9a4a6957d9452
+	[libmaxminddb-1.14.1]=ca5c87d41339f8bc4daabb53e8a9356b3c995f2d2419b85d7bff823b2ecc252d
+)
+# Коммиты git-модулей (проверено 2026-11-25). Подмодуль brotli закреплён самим ngx_brotli.
+declare -gA NGX_GIT_PIN=(
+	[ngx_brotli]=53e0fb55f250f48fe80c0ddbf6c0f7103cdbaae1
+	[headers-more-nginx-module]=e30b10e0bb1cfb042d76ba3a865410ff95d65660
+	[zstd-nginx-module]=057a7d339af1111d04b5a9ac5ae9b0250d17cd94
+	[set-misc-nginx-module]=4a4e2ce09ac8a6505a58ef8a2265ff42a87a0c9d
+	[nginx-module-vts]=3b9235819e4a8bdadd30fbb70434b07d20c33248
+)
 
 # --- Пути --------------------------------------------------------------------
 NGX_SRC=/usr/local/src/nginx
@@ -174,41 +195,136 @@ _nginx_install_deps() {
 		liburing-dev equivs binutils ccache pkg-config
 }
 
-# Хелпер: git clone (depth 1) с учётом DRY_RUN
-# Уже склонированный модуль обновляем до свежего коммита (раньше пропускали, и пересборка
-# nginx оставляла модули годовой давности). Не удалось обновить — собираем с тем, что есть.
+# Хелпер: git-модуль на закреплённом коммите (NGX_GIT_PIN[имя каталога]) с учётом DRY_RUN.
+# Раньше брался последний коммит ветки по умолчанию: в сборку от root попадало всё, что туда
+# закоммитили. Теперь модуль ставится на известный коммит, после checkout он сверяется.
+# Не удалось скачать, но модуль уже есть с прошлой сборки: собираем с ним и предупреждаем.
 _ngx_clone() {
 	local url="$1" dest="$2"; shift 2
-	if [[ -d "$dest/.git" ]]; then
-		[[ "${DRY_RUN:-0}" == "1" ]] && { ui_info "${UI_D}[dry-run]${UI_NC} git fetch $(basename "$dest")"; return 0; }
-		local before; before="$(git -C "$dest" rev-parse HEAD 2>/dev/null)"
-		if git -C "$dest" fetch --depth 1 origin >>"$NGX_BUILD_LOG" 2>&1 && git -C "$dest" reset --hard FETCH_HEAD >>"$NGX_BUILD_LOG" 2>&1; then
-			[[ " $* " == *" --recurse-submodules "* ]] && git -C "$dest" submodule update --init --recursive --depth 1 >>"$NGX_BUILD_LOG" 2>&1
-			[[ "$(git -C "$dest" rev-parse HEAD 2>/dev/null)" != "$before" ]] && ui_info "обновлён: $(basename "$dest")" || ui_info "актуален: $(basename "$dest")"
-		else
-			ui_warn "Не удалось обновить $(basename "$dest") — собираю с прежней версией."
-		fi
+	local name; name="$(basename "$dest")"
+	local pin="${NGX_GIT_PIN[$name]:-}" sub=0 before="" head
+	[[ " $* " == *" --recurse-submodules "* ]] && sub=1
+	if [[ "${DRY_RUN:-0}" == "1" ]]; then
+		ui_info "${UI_D}[dry-run]${UI_NC} git ${name} ${pin:0:12}"
 		return 0
 	fi
-	sys_run "git clone $(basename "$dest")" git clone --depth 1 "$@" "$url" "$dest"
+	if [[ -z "$pin" ]]; then
+		ui_error "Для модуля ${name} не закреплён коммит (NGX_GIT_PIN), не собираю его."
+		return 1
+	fi
+	if [[ -d "$dest/.git" ]]; then
+		before="$(git -C "$dest" rev-parse HEAD 2>/dev/null)"
+		git -C "$dest" remote set-url origin "$url" >>"$NGX_BUILD_LOG" 2>&1
+	else
+		rm -rf -- "$dest"
+		mkdir -p "$dest" && git -C "$dest" init -q >>"$NGX_BUILD_LOG" 2>&1 \
+			&& git -C "$dest" remote add origin "$url" >>"$NGX_BUILD_LOG" 2>&1 \
+			|| { ui_error "Не удалось подготовить каталог ${dest}."; return 1; }
+	fi
+	if [[ "$before" != "$pin" ]]; then
+		if ! { ui_spin "Загрузка ${name}" bash -c \
+			"for i in 1 2 3; do git -C '$dest' fetch -q --depth 1 origin '$pin' && exit 0; sleep ${NGX_RETRY_SLEEP:-5}; done; exit 1" \
+			&& git -C "$dest" -c advice.detachedHead=false checkout -q --force FETCH_HEAD >>"$NGX_BUILD_LOG" 2>&1; }; then
+			if [[ -n "$before" ]]; then
+				ui_warn "Не удалось скачать ${name} ${pin:0:12}, собираю с прежней версией ${before:0:12}."
+				return 0
+			fi
+			ui_error "Не удалось скачать ${name}: ${url}"
+			return 1
+		fi
+	fi
+	head="$(git -C "$dest" rev-parse HEAD 2>/dev/null)"
+	if [[ "$head" != "$pin" ]]; then
+		ui_error "${name}: после загрузки коммит ${head:0:12}, ждали ${pin:0:12}. Модуль не использую."
+		return 1
+	fi
+	if ((sub)) && ! git -C "$dest" submodule update --init --recursive --depth 1 >>"$NGX_BUILD_LOG" 2>&1; then
+		ui_warn "${name}: подмодули не подтянулись."
+	fi
+	[[ "$before" == "$pin" ]] && ui_info "актуален: ${name} ${pin:0:12}" || ui_info "${name}: коммит ${pin:0:12}"
+	return 0
 }
-# Хелпер: wget + распаковка tar
+
+# _ngx_tar_check ИМЯ-ВЕРСИЯ — чем проверять архив с закреплённой версией: sha256:СУММА или nosum,
+# если версию поменяли в setup.conf и сумма для неё не известна.
+_ngx_tar_check() {
+	local s="${NGX_TAR_SHA256[$1]:-}"
+	[[ -n "$s" ]] && echo "sha256:$s" || echo nosum
+}
+
+# _ngx_verify ФАЙЛ URL ПРОВЕРКА ИМЯ — проверить скачанный архив.
+#   gpg:КЛЮЧИ[:РАСШИРЕНИЕ] — подпись URL.asc (или URL.РАСШИРЕНИЕ) ключами assets/keys/КЛЮЧИ.gpg;
+#   sha256:СУММА — сумма; nosum — сумма не известна, только предупреждение. Не сошлось — код 1.
+_ngx_verify() {
+	local file="$1" url="$2" check="$3" name="$4"
+	case "$check" in
+		gpg:*)
+			local spec="${check#gpg:}" ring ext=.asc sig kr
+			ring="${spec%%:*}"; [[ "$spec" == *:* ]] && ext="${spec#*:}"
+			if [[ "${NGX_VERIFY_SIG:-y}" != "y" ]]; then
+				ui_warn "Подпись ${name} не проверяется (NGX_VERIFY_SIG=n в setup.conf)."
+				return 0
+			fi
+			kr="${NGX_KEYS_DIR:-${ASSETS_DIR:-${SCRIPT_DIR:-.}/assets}/keys}/${ring}.gpg"
+			[[ -s "$kr" ]] || { ui_error "Нет ключей для проверки ${name}: ${kr}"; return 1; }
+			command -v gpgv >/dev/null 2>&1 || { ui_error "Нет gpgv, подпись ${name} не проверить (apt install gpgv)."; return 1; }
+			sig="$(mktemp)"
+			if ! wget -q --timeout=30 --tries=3 -O "$sig" "${url}${ext}"; then
+				rm -f "$sig"
+				ui_error "Не удалось скачать подпись ${name}: ${url}${ext}"
+				return 1
+			fi
+			if gpgv --keyring "$kr" "$sig" "$file" >>"$NGX_BUILD_LOG" 2>&1; then
+				rm -f "$sig"
+				ui_info "${name}: подпись проверена."
+				return 0
+			fi
+			rm -f "$sig"
+			ui_error "${name}: подпись НЕ сошлась, архив не использую. Если проект сменил ключ, обновите LuckyStack (luckyctl self-update); подробности в ${NGX_BUILD_LOG}."
+			return 1 ;;
+		sha256:*)
+			local want="${check#sha256:}" got
+			got="$(sha256sum "$file" | cut -d' ' -f1)"
+			if [[ "$got" == "$want" ]]; then
+				ui_info "${name}: контрольная сумма сошлась."
+				return 0
+			fi
+			ui_error "${name}: контрольная сумма НЕ сошлась (ждали ${want:0:16}…, получили ${got:0:16}…), архив не использую."
+			return 1 ;;
+		nosum)
+			ui_warn "${name}: версия изменена в setup.conf, контрольная сумма для неё не известна, архив не проверен."
+			return 0 ;;
+	esac
+	return 0
+}
+
+# _ngx_download URL ФАЙЛ ИМЯ — скачать с повторами и проверкой, что это целый gzip.
+_ngx_download() {
+	local url="$1" out="$2" name="$3"
+	ui_spin "Загрузка ${name}" bash -c \
+		"for i in 1 2 3; do wget -q --timeout=30 --tries=2 -O '$out' '$url' && gzip -t '$out' && exit 0; sleep ${NGX_RETRY_SLEEP:-5}; done; exit 1"
+}
+
+# Хелпер: wget + проверка + распаковка tar. ПРОВЕРКА как у _ngx_verify (пусто — без проверки).
 _ngx_fetch_tar() {
-	local url="$1" dest="$2" strip="${3:-1}"
+	local url="$1" dest="$2" strip="${3:-1}" check="${4:-}"
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
 		ui_info "${UI_D}[dry-run]${UI_NC} wget+tar → $(basename "$dest")"
 		return 0
 	fi
-	mkdir -p "$dest"
 	# Сначала в файл, с повторами и проверкой архива. Раньше wget шёл сразу в tar: обрыв связи
 	# не замечался, каталог оставался пустым, и сборка падала потом с непонятной ошибкой.
 	local tmp; tmp="$(mktemp)"
-	if ! ui_spin "Загрузка $(basename "$dest")" bash -c \
-		"for i in 1 2 3; do wget -q --timeout=30 --tries=2 -O '$tmp' '$url' && gzip -t '$tmp' && exit 0; sleep 5; done; exit 1"; then
+	if ! _ngx_download "$url" "$tmp" "$(basename "$dest")"; then
 		rm -f "$tmp"
 		ui_error "Не удалось скачать $(basename "$dest"): $url"
 		return 1
 	fi
+	if [[ -n "$check" ]] && ! _ngx_verify "$tmp" "$url" "$check" "$(basename "$dest")"; then
+		rm -f "$tmp"
+		return 1
+	fi
+	mkdir -p "$dest"
 	tar xzf "$tmp" --no-same-owner --no-same-permissions --strip-components="$strip" -C "$dest" 2>>"$NGX_BUILD_LOG"
 	local rc=$?
 	rm -f "$tmp"
@@ -223,50 +339,53 @@ _nginx_fetch_sources() {
 
 	# nginx tarball
 	_ngx_fetch_tar "https://nginx.org/download/nginx-${NGINX_VER}.tar.gz" \
-		"$NGX_SRC/nginx-${NGINX_VER}" 1 || return 1
+		"$NGX_SRC/nginx-${NGINX_VER}" 1 gpg:nginx || return 1
 
 	# Brotli (+submodule) — библиотеки deps/brotli нужно СОБРАТЬ (cmake),
 	# иначе линковка nginx падает: «cannot find -lbrotlienc -lbrotlicommon».
 	if [[ "$NGX_BROTLI" == "y" ]]; then
-		_ngx_clone "https://github.com/google/ngx_brotli" "$NGX_MOD/ngx_brotli" --recurse-submodules
+		_ngx_clone "https://github.com/google/ngx_brotli" "$NGX_MOD/ngx_brotli" --recurse-submodules || return 1
 		_nginx_build_brotli
 	fi
 	# Headers-More
-	[[ "$NGX_HEADERMOD" == "y" ]] && _ngx_clone \
-		"https://github.com/openresty/headers-more-nginx-module" "$NGX_MOD/headers-more-nginx-module"
+	if [[ "$NGX_HEADERMOD" == "y" ]]; then
+		_ngx_clone "https://github.com/openresty/headers-more-nginx-module" "$NGX_MOD/headers-more-nginx-module" || return 1
+	fi
 	# zstd
-	[[ "$NGX_ZSTD" == "y" ]] && _ngx_clone \
-		"https://github.com/tokers/zstd-nginx-module.git" "$NGX_MOD/zstd-nginx-module"
+	if [[ "$NGX_ZSTD" == "y" ]]; then
+		_ngx_clone "https://github.com/tokers/zstd-nginx-module.git" "$NGX_MOD/zstd-nginx-module" || return 1
+	fi
 	# cache purge
 	if [[ "$NGX_CACHEPURGE" == "y" ]]; then
 		_ngx_fetch_tar "https://github.com/nginx-modules/ngx_cache_purge/archive/refs/tags/${CACHEPURGE_VER}.tar.gz" \
-			"$NGX_MOD/ngx_cache_purge-${CACHEPURGE_VER}" 1 || return 1
+			"$NGX_MOD/ngx_cache_purge-${CACHEPURGE_VER}" 1 "$(_ngx_tar_check "ngx_cache_purge-${CACHEPURGE_VER}")" || return 1
 	fi
 	# set-misc (+ devel kit)
 	if [[ "$NGX_SETMISC" == "y" ]]; then
 		_ngx_fetch_tar "https://github.com/simplresty/ngx_devel_kit/archive/v${NGINX_DEV_KIT}.tar.gz" \
-			"$NGX_MOD/ngx_devel_kit-${NGINX_DEV_KIT}" 1 || return 1
-		_ngx_clone "https://github.com/openresty/set-misc-nginx-module.git" "$NGX_MOD/set-misc-nginx-module"
+			"$NGX_MOD/ngx_devel_kit-${NGINX_DEV_KIT}" 1 "$(_ngx_tar_check "ngx_devel_kit-${NGINX_DEV_KIT}")" || return 1
+		_ngx_clone "https://github.com/openresty/set-misc-nginx-module.git" "$NGX_MOD/set-misc-nginx-module" || return 1
 	fi
 	# VTS
-	[[ "$NGX_VTS" == "y" ]] && _ngx_clone \
-		"https://github.com/vozlt/nginx-module-vts.git" "$NGX_MOD/nginx-module-vts"
+	if [[ "$NGX_VTS" == "y" ]]; then
+		_ngx_clone "https://github.com/vozlt/nginx-module-vts.git" "$NGX_MOD/nginx-module-vts" || return 1
+	fi
 	# zlib-ng — скачать И собрать (libz-ng.a). nginx линкуется через патч ниже.
 	if [[ "$NGX_ZLIBNG" == "y" ]]; then
 		_ngx_fetch_tar "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/${ZLIBNG_VER}.tar.gz" \
-			"$NGX_MOD/zlib-ng-${ZLIBNG_VER}" 1 || return 1
+			"$NGX_MOD/zlib-ng-${ZLIBNG_VER}" 1 "$(_ngx_tar_check "zlib-ng-${ZLIBNG_VER}")" || return 1
 		_nginx_build_zlibng
 	fi
 	# PCRE2
 	if [[ "$NGX_PCRE2" == "y" ]]; then
 		_ngx_fetch_tar "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VER}/pcre2-${PCRE2_VER}.tar.gz" \
-			"$NGX_MOD/pcre2-${PCRE2_VER}" 1 || return 1
+			"$NGX_MOD/pcre2-${PCRE2_VER}" 1 gpg:pcre2:.sig || return 1
 	fi
 	# GeoIP2 (модуль + libmaxminddb)
 	if [[ "$NGX_GEOIP" == "y" ]]; then
 		_nginx_build_libmaxminddb || return 1
 		_ngx_fetch_tar "https://github.com/leev/ngx_http_geoip2_module/archive/${GEOIP2_VER}.tar.gz" \
-			"$NGX_MOD/ngx_http_geoip2_module-${GEOIP2_VER}" 1 || return 1
+			"$NGX_MOD/ngx_http_geoip2_module-${GEOIP2_VER}" 1 "$(_ngx_tar_check "ngx_http_geoip2_module-${GEOIP2_VER}")" || return 1
 	fi
 	return 0
 }
@@ -365,7 +484,7 @@ _nginx_build_libmaxminddb() {
 	local d="$NGX_MOD/libmaxminddb-${LIBMAXMINDDB_VER}"
 	_ngx_fetch_tar \
 		"https://github.com/maxmind/libmaxminddb/releases/download/${LIBMAXMINDDB_VER}/libmaxminddb-${LIBMAXMINDDB_VER}.tar.gz" \
-		"$d" 1 || true   # не скачалась: сборка ниже не пройдёт, и сработает общая проверка
+		"$d" 1 "$(_ngx_tar_check "libmaxminddb-${LIBMAXMINDDB_VER}")" || true   # не скачалась или не сошлась сумма: сборка ниже не пройдёт, и сработает общая проверка
 	ui_spin "Сборка libmaxminddb" bash -c \
 		"cd '$d' && ./configure >>'$NGX_BUILD_LOG' 2>&1 && make -j\$(nproc) >>'$NGX_BUILD_LOG' 2>&1 && make install >>'$NGX_BUILD_LOG' 2>&1 && ldconfig" && return 0
 	# Без библиотеки модуль GeoIP2 не соберётся. Библиотека от прошлой сборки подойдёт,
@@ -459,13 +578,21 @@ _nginx_prebuild_openssl() {
 	mkdir -p "$NGX_MOD"
 	# Чистка перед сборкой: грязное дерево после ретрая даёт «BIO_MSG» и
 	# «impossible API compatibility level».
-	if ! ui_spin "OpenSSL ${OPENSSL_VER}: загрузка + сборка (no-tests, -O2)" bash -c "
+	local tgz="$NGX_MOD/openssl-${OPENSSL_VER}.tar.gz" u ok=0
+	rm -rf "$NGX_MOD/quictls" "$NGX_MOD/openssl-${OPENSSL_VER}" "$tgz"*
+	# Архив и подпись с одного и того же зеркала; не скачалось или подпись не сошлась — следующее
+	for u in "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VER}/openssl-${OPENSSL_VER}.tar.gz" \
+	         "https://www.openssl.org/source/openssl-${OPENSSL_VER}.tar.gz" \
+	         "https://www.openssl.org/source/old/${OPENSSL_VER%.*}/openssl-${OPENSSL_VER}.tar.gz"; do
+		_ngx_download "$u" "$tgz" "OpenSSL ${OPENSSL_VER}" && _ngx_verify "$tgz" "$u" gpg:openssl "OpenSSL ${OPENSSL_VER}" && { ok=1; break; }
+		rm -f "$tgz"
+	done
+	if ((ok == 0)); then
+		ui_error "OpenSSL ${OPENSSL_VER} не скачался или не прошёл проверку подписи. Лог: $NGX_BUILD_LOG"
+		return 1
+	fi
+	if ! ui_spin "OpenSSL ${OPENSSL_VER}: сборка (no-tests, -O2)" bash -c "
 		cd '$NGX_MOD' && \
-		rm -rf quictls 'openssl-${OPENSSL_VER}' 'openssl-${OPENSSL_VER}.tar.gz'* && \
-		( wget -q --timeout=30 --tries=2 -O 'openssl-${OPENSSL_VER}.tar.gz' 'https://www.openssl.org/source/openssl-${OPENSSL_VER}.tar.gz' \
-		  || wget -q --timeout=30 --tries=2 -O 'openssl-${OPENSSL_VER}.tar.gz' 'https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VER}/openssl-${OPENSSL_VER}.tar.gz' \
-		  || wget -q --timeout=30 --tries=2 -O 'openssl-${OPENSSL_VER}.tar.gz' 'https://www.openssl.org/source/old/${OPENSSL_VER%.*}/openssl-${OPENSSL_VER}.tar.gz' ) && \
-		test -s 'openssl-${OPENSSL_VER}.tar.gz' && \
 		tar xaf 'openssl-${OPENSSL_VER}.tar.gz' --no-same-owner --no-same-permissions && \
 		mv 'openssl-${OPENSSL_VER}' quictls && \
 		cd quictls && \
