@@ -401,7 +401,9 @@ function mm_healthcheck() {
 	$dir = mm_installer_dir();
 	if(mm_installer_problem($dir) !== '') return 'установщик недоступен: '.mm_installer_problem($dir);
 	$o = array(); $rc = 0;
-	exec('cd '.escapeshellarg($dir).' && HC_NO_CLEAR=1 TERM=dumb timeout 170 ./server-setup.sh --healthcheck </dev/null 2>&1', $o, $rc);
+	// всегда по-русски: ниже вывод разбирается по названиям разделов и строк (FIX_GROUPS, FIXES),
+	// а язык интерфейса сервера может быть английским
+	exec('cd '.escapeshellarg($dir).' && HC_NO_CLEAR=1 TERM=dumb timeout 170 ./server-setup.sh --lang ru --healthcheck </dev/null 2>&1', $o, $rc);
 	$groups = array(); $g = ''; $counts = array('ok' => 0, 'warn' => 0, 'fail' => 0);
 	foreach(explode("\n", mm_clean(implode("\n", $o))) as $l) {
 		if(preg_match('/^┌─\s*(.+?)\s*─+/u', $l, $m)) { $g = $m[1]; continue; }
