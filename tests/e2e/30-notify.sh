@@ -10,8 +10,9 @@ command -v python3 >/dev/null 2>&1 || { note "нет python3 для заглуш
 LOG=/root/.luckystack-e2e-tg.log
 : >"$LOG"
 python3 - "$LOG" >/dev/null 2>&1 <<'PY' &
-import http.server, json, sys, urllib.parse
+import http.server, json, os, sys, urllib.parse
 log = sys.argv[1]
+queue = log + ".updates"   # что отдать боту на getUpdates (файл забирается один раз)
 class H(http.server.BaseHTTPRequestHandler):
     def _h(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -21,9 +22,17 @@ class H(http.server.BaseHTTPRequestHandler):
             except Exception: q = body
         else:
             q = {k: v[0] for k, v in urllib.parse.parse_qs(body).items()}
-        with open(log, "a") as f:
-            f.write(json.dumps({"method": self.path.rsplit("/", 1)[-1], "body": q}, ensure_ascii=False) + "\n")
-        out = b'{"ok":true,"result":{"message_id":1}}'
+        method = self.path.rsplit("/", 1)[-1]
+        if method == "getUpdates":
+            res = "[]"
+            if os.path.exists(queue):
+                with open(queue) as f: res = f.read().strip() or "[]"
+                os.remove(queue)
+            out = ('{"ok":true,"result":' + res + '}').encode()
+        else:
+            with open(log, "a") as f:
+                f.write(json.dumps({"method": method, "body": q}, ensure_ascii=False) + "\n")
+            out = b'{"ok":true,"result":{"message_id":1}}'
         self.send_response(200); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
     do_POST = _h
@@ -63,6 +72,35 @@ if [[ -r /opt/luckystack/current/lang/en.lng ]]; then
 	: >"$LOG"
 	"$N" -e monitor -l warn "Сводка за сутки" "Бэкап: последний 1 дн. назад" >/dev/null 2>&1
 	grep -q 'Сводка за сутки' "$LOG" && ok "без NOTIFY_LANG уведомление на языке сервера (русском)" || bad "уведомление без NOTIFY_LANG не на русском"
+fi
+
+# Бот отвечает на языке уведомлений: отдаём ему /status и /backup от разрешённого id 111
+BOT=/usr/local/sbin/server-tg-bot.php
+if [[ -f "$BOT" ]] && command -v php >/dev/null 2>&1; then
+	bot_was=""; systemctl is-active --quiet server-tg-bot 2>/dev/null && { bot_was=1; systemctl stop server-tg-bot; }
+	mkdir -p /root/.luckystack-e2e-bot
+	cp -a /var/lib/server-notify/tg-offset /var/lib/server-notify/chats.json /root/.luckystack-e2e-bot/ 2>/dev/null
+	rm -f /var/lib/server-notify/tg-offset
+	if grep -q '^NOTIFY_TG_BOT=' "$C"; then sed -i "s|^NOTIFY_TG_BOT=.*|NOTIFY_TG_BOT='y'|" "$C"; else echo "NOTIFY_TG_BOT='y'" >>"$C"; fi
+	if grep -q '^NOTIFY_LANG=' "$C"; then sed -i "s|^NOTIFY_LANG=.*|NOTIFY_LANG='en'|" "$C"; else echo "NOTIFY_LANG='en'" >>"$C"; fi
+	upd() {   # $1 = update_id, $2 = команда
+		printf '[{"update_id":%s,"message":{"message_id":%s,"from":{"id":111},"chat":{"id":111,"type":"private"},"text":"%s"}}]' "$1" "$1" "$2" >"${LOG}.updates"
+	}
+	waitlog() { local i; for i in $(seq 1 30); do grep -q "$1" "$LOG" && return 0; sleep 0.5; done; return 1; }
+	php "$BOT" >/dev/null 2>&1 &
+	bot_pid=$!
+	: >"$LOG"; upd 9001 /status
+	waitlog 'Uptime:' && grep -q 'Services:' "$LOG" && ok "бот отвечает по-английски (NOTIFY_LANG=en)" || bad "бот не ответил по-английски на /status"
+	: >"$LOG"; upd 9002 /backup
+	waitlog 'Start a backup now' && grep -q '"Confirm"' "$LOG" && ok "вопрос и кнопки бота на английском" || bad "вопрос бота не на английском"
+	sed -i "s|^NOTIFY_LANG=.*|NOTIFY_LANG=''|" "$C"
+	: >"$LOG"; upd 9003 /status
+	waitlog 'Аптайм:' && ok "без NOTIFY_LANG бот отвечает на языке сервера (русском)" || bad "бот без NOTIFY_LANG ответил не по-русски"
+	kill "$bot_pid" 2>/dev/null; wait "$bot_pid" 2>/dev/null
+	rm -f "${LOG}.updates" /var/lib/server-notify/tg-offset /var/lib/server-notify/chats.json
+	cp -a /root/.luckystack-e2e-bot/. /var/lib/server-notify/ 2>/dev/null; rm -rf /root/.luckystack-e2e-bot
+	mysql --defaults-file=/etc/mysql/debian.cnf dbispconfig -e "DELETE FROM ss_panel_audit WHERE username='telegram:111'" 2>/dev/null
+	[[ -n "$bot_was" ]] && systemctl start server-tg-bot
 fi
 
 # Монитор видит упавшую службу (берём ту, что точно есть и не держит сайт)

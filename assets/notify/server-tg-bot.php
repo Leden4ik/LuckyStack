@@ -21,11 +21,15 @@
   Подтверждение — кнопка под сообщением, действует 2 минуты и только для того, кто вызвал команду.
   Каждое действие пишется в журнал действий панели (ss_panel_audit, панель telegram).
   Включается в панели (System → Notifications, «Управление из Telegram» → NOTIFY_TG_BOT='y').
+
+  Язык ответов: NOTIFY_LANG (ru|en) из /etc/server-notify.conf, а если он пуст, UI_LANG сервера
+  из /etc/luckystack/setup.conf. Журнал бота всегда по-русски, как остальные журналы.
 */
 
 $CONF  = '/etc/server-notify.conf';
 $STATE = '/var/lib/server-notify';
 $LOG   = '/var/log/server-tg-bot.log';
+$LANG  = 'ru';
 @mkdir($STATE, 0700, true);
 
 function blog($m) { global $LOG; @file_put_contents($LOG, date('Y-m-d H:i:s').' '.$m."\n", FILE_APPEND); @chmod($LOG, 0600); }
@@ -34,6 +38,14 @@ function readconf() {
 	if(is_file($CONF)) foreach(file($CONF) as $l) if(preg_match("/^\s*([A-Z_][A-Z0-9_]*)=(.*)$/", $l, $m)) $o[$m[1]] = trim(trim($m[2]), "'\"");
 	return $o;
 }
+// язык ответов: настройка уведомлений, иначе язык сервера, иначе русский
+function bot_lang($cf) {
+	$l = isset($cf['NOTIFY_LANG']) ? $cf['NOTIFY_LANG'] : '';
+	if($l === '' && preg_match('/^UI_LANG=["\']?([a-z]+)/m', (string)@file_get_contents('/etc/luckystack/setup.conf'), $m)) $l = $m[1];
+	return $l === 'en' ? 'en' : 'ru';
+}
+// L('по-русски', 'in English') — фраза на языке ответов
+function L($ru, $en) { global $LANG; return $LANG === 'en' ? $en : $ru; }
 function allowed_ids($cf) {
 	$out = array();
 	foreach(preg_split('/[\s,;]+/', trim((isset($cf['NOTIFY_TG_CHATS']) ? $cf['NOTIFY_TG_CHATS'] : '').' '.(isset($cf['NOTIFY_TG_CHAT']) ? $cf['NOTIFY_TG_CHAT'] : '')), -1, PREG_SPLIT_NO_EMPTY) as $c)
@@ -79,7 +91,8 @@ function cmd_status() {
 	$up = (int)@file_get_contents('/proc/uptime');
 	$load = implode(' ', array_slice(explode(' ', trim(@file_get_contents('/proc/loadavg'))), 0, 3));
 	$df = trim(shell_exec("df -P / | awk 'NR==2{print \$5}'"));
-	$mem = trim(shell_exec("free -m | awk '/^Mem:/{printf \"%d из %d МБ\", \$3, \$2}'"));
+	$mm = preg_split('/\s+/', trim(shell_exec("free -m | awk '/^Mem:/{print \$3, \$2}'")));
+	$mem = count($mm) === 2 ? sprintf(L('%d из %d МБ', '%d of %d MB'), $mm[0], $mm[1]) : '?';
 	$down = array();
 	$units = 'mariadb mysql redis-server postfix dovecot named bind9 nginx apache2 rspamd crowdsec crowdsec-firewall-bouncer fail2ban pure-ftpd-mysql clamav-daemon '
 		.trim(shell_exec("systemctl list-unit-files 'php*-fpm.service' --no-legend 2>/dev/null | awk '{sub(\".service\",\"\",\$1); print \$1}' | tr '\\n' ' '"));
@@ -92,49 +105,49 @@ function cmd_status() {
 	if(is_file('/etc/server-backup.conf')) {
 		$dir = trim(shell_exec('. /etc/server-backup.conf 2>/dev/null; echo "${BACKUP_DIR:-/var/backups/server}"'));
 		$newest = 0; foreach((array)glob(rtrim($dir, '/').'/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]', GLOB_ONLYDIR) as $d) $newest = max($newest, filemtime($d));
-		$bk = $newest ? 'последний '.floor((time() - $newest) / 86400).' дн. назад ('.date('Y-m-d H:i', $newest).')' : 'снимков нет';
+		$bk = $newest ? sprintf(L('последний %d дн. назад (%s)', 'last one %d days ago (%s)'), floor((time() - $newest) / 86400), date('Y-m-d H:i', $newest)) : L('снимков нет', 'no snapshots');
 	}
-	$reboot = is_file('/var/run/reboot-required') ? 'НУЖНА' : 'не нужна';
-	return "Сервер $host\n"
-		.'Аптайм: '.floor($up / 86400).' д '.floor($up % 86400 / 3600).' ч, нагрузка: '.$load."\n"
-		."Диск /: $df, память: $mem\n"
-		.'Службы: '.($down ? 'НЕ работают: '.implode(', ', $down) : 'все работают')."\n"
-		."Бэкап: $bk\n"
-		."Перезагрузка: $reboot";
+	$reboot = is_file('/var/run/reboot-required') ? L('НУЖНА', 'REQUIRED') : L('не нужна', 'not needed');
+	return L('Сервер ', 'Server ').$host."\n"
+		.sprintf(L('Аптайм: %d д %d ч, нагрузка: %s', 'Uptime: %dd %dh, load: %s'), floor($up / 86400), floor($up % 86400 / 3600), $load)."\n"
+		.sprintf(L('Диск /: %s, память: %s', 'Disk /: %s, memory: %s'), $df, $mem)."\n"
+		.L('Службы: ', 'Services: ').($down ? L('НЕ работают: ', 'NOT running: ').implode(', ', $down) : L('все работают', 'all running'))."\n"
+		.L('Бэкап: ', 'Backup: ').$bk."\n"
+		.L('Перезагрузка: ', 'Reboot: ').$reboot;
 }
 function cmd_bans() {
 	$t = '';
 	if(trim(shell_exec('command -v cscli')) !== '') {
 		list($rc, $o) = run('cscli decisions list -o json');
 		$rows = array(); foreach((array)json_decode(implode("\n", $o), true) as $a) foreach((array)@$a['decisions'] as $d) $rows[] = $d;
-		$t .= 'CrowdSec, локальных банов: '.count($rows)."\n";
+		$t .= L('CrowdSec, локальных банов: ', 'CrowdSec, local bans: ').count($rows)."\n";
 		foreach(array_slice($rows, 0, 10) as $d) $t .= '  '.$d['value'].' — '.$d['scenario'].' ('.$d['duration'].")\n";
 	}
 	if(trim(shell_exec('command -v fail2ban-client')) !== '') {
 		list($rc, $o) = run('fail2ban-client banned');
 		$s = implode(' ', $o); $n = preg_match_all("/'([0-9a-fA-F:.]+)'/", $s, $mm);
-		$t .= 'fail2ban, банов: '.$n.($n ? ': '.implode(', ', array_slice($mm[1], 0, 10)) : '')."\n";
+		$t .= L('fail2ban, банов: ', 'fail2ban, bans: ').$n.($n ? ': '.implode(', ', array_slice($mm[1], 0, 10)) : '')."\n";
 	}
-	return $t !== '' ? trim($t) : 'Ни CrowdSec, ни fail2ban не найдены.';
+	return $t !== '' ? trim($t) : L('Ни CrowdSec, ни fail2ban не найдены.', 'Neither CrowdSec nor fail2ban is installed.');
 }
 function cmd_check($ip) {
-	if(!valid_ip($ip)) return 'Нужен IP-адрес: /check 1.2.3.4';
+	if(!valid_ip($ip)) return L('Нужен IP-адрес: /check 1.2.3.4', 'An IP address is needed: /check 1.2.3.4');
 	$t = "IP $ip\n";
 	if(trim(shell_exec('command -v cscli')) !== '') {
 		list($rc, $o) = run('cscli allowlists check '.escapeshellarg($ip));
-		foreach($o as $l) if(stripos($l, 'allowlisted by') !== false) $t .= 'Доверенный: '.trim($l)."\n";
+		foreach($o as $l) if(stripos($l, 'allowlisted by') !== false) $t .= L('Доверенный: ', 'Trusted: ').trim($l)."\n";
 		list($rc, $o) = run('cscli decisions list -a -i '.escapeshellarg($ip).' -o json');
 		$d = array(); foreach((array)json_decode(implode("\n", $o), true) as $a) foreach((array)@$a['decisions'] as $x) $d[] = $x['type'].' '.$x['origin'].' / '.$x['scenario'].' ('.$x['duration'].')';
-		$t .= 'CrowdSec: '.($d ? implode('; ', $d) : 'нет решений')."\n";
+		$t .= 'CrowdSec: '.($d ? implode('; ', $d) : L('нет решений', 'no decisions'))."\n";
 	}
 	if(trim(shell_exec('command -v fail2ban-client')) !== '') {
 		list($rc, $o) = run('fail2ban-client banned '.escapeshellarg($ip));
 		preg_match_all("/'([A-Za-z0-9_.-]+)'/", implode(' ', $o), $m);
-		$t .= 'fail2ban: '.($m[1] ? 'забанен в '.implode(', ', $m[1]) : 'не забанен')."\n";
+		$t .= 'fail2ban: '.($m[1] ? L('забанен в ', 'banned in ').implode(', ', $m[1]) : L('не забанен', 'not banned'))."\n";
 	}
 	$db = db();
 	if($db) { $r = @$db->query("SELECT target FROM ufw_block WHERE active='y'");
-		if($r) while($x = $r->fetch_assoc()) if($x['target'] === $ip || (strpos($x['target'], '/') !== false && ip_in($ip, $x['target']))) $t .= 'Блок-лист ufw: '.$x['target']."\n"; }
+		if($r) while($x = $r->fetch_assoc()) if($x['target'] === $ip || (strpos($x['target'], '/') !== false && ip_in($ip, $x['target']))) $t .= L('Блок-лист ufw: ', 'ufw block list: ').$x['target']."\n"; }
 	return trim($t);
 }
 function ip_in($ip, $cidr) {
@@ -149,36 +162,41 @@ function do_unban($ip) {
 	$t = '';
 	if(trim(shell_exec('command -v cscli')) !== '') {
 		list($rc, $o) = run('cscli decisions delete --ip '.escapeshellarg($ip));
-		$t .= 'CrowdSec: '.(preg_match('/(\d+) decision\(s\) deleted/', implode(' ', $o), $m) ? 'снято решений '.$m[1] : trim(implode(' ', $o)))."\n";
+		$t .= 'CrowdSec: '.(preg_match('/(\d+) decision\(s\) deleted/', implode(' ', $o), $m) ? L('снято решений ', 'decisions removed: ').$m[1] : trim(implode(' ', $o)))."\n";
 	}
-	if(trim(shell_exec('command -v fail2ban-client')) !== '') { list($rc, $o) = run('fail2ban-client unban '.escapeshellarg($ip)); $t .= 'fail2ban: снято банов '.trim(implode(' ', $o))."\n"; }
-	return trim($t) !== '' ? trim($t) : 'Нечего снимать.';
+	if(trim(shell_exec('command -v fail2ban-client')) !== '') { list($rc, $o) = run('fail2ban-client unban '.escapeshellarg($ip)); $t .= L('fail2ban: снято банов ', 'fail2ban: bans removed: ').trim(implode(' ', $o))."\n"; }
+	return trim($t) !== '' ? trim($t) : L('Нечего снимать.', 'Nothing to remove.');
 }
 function do_allow($ip, $hours, $uid) {
-	$db = db(); if(!$db) return 'Нет связи с базой панели.';
-	$c = 'из Telegram ('.$uid.')';
+	$db = db(); if(!$db) return L('Нет связи с базой панели.', 'No connection to the panel database.');
+	$c = L('из Telegram', 'from Telegram').' ('.$uid.')';
 	$sec = $hours * 3600;
 	$st = $db->prepare("INSERT INTO ss_trusted_ip (target, comment, expires, source, created, created_by, applied) VALUES (?, ?, IF(? > 0, NOW() + INTERVAL ? SECOND, NULL), 'panel', NOW(), ?, 'n')
 		ON DUPLICATE KEY UPDATE comment = VALUES(comment), expires = VALUES(expires), applied = 'n', applied_at = NULL, note = NULL");
-	if(!$st) return 'Таблицы доверенных IP нет (панель «Доверенные IP» не установлена).';
+	if(!$st) return L('Таблицы доверенных IP нет (панель «Доверенные IP» не установлена).', 'There is no trusted IP table (the Trusted IPs panel is not installed).');
 	$by = 'telegram:'.$uid; $st->bind_param('ssiis', $ip, $c, $sec, $sec, $by); $st->execute();
 	if(is_file('/usr/local/ispconfig/server/scripts/ss-trusted-sync.php')) run('/usr/bin/php /usr/local/ispconfig/server/scripts/ss-trusted-sync.php');
-	return "$ip добавлен в доверенные ".($hours > 0 ? "на $hours ч" : 'навсегда').'. CrowdSec и fail2ban его больше не банят, текущие баны сняты.';
+	return $hours > 0
+		? sprintf(L('%s добавлен в доверенные на %d ч. CrowdSec и fail2ban его больше не банят, текущие баны сняты.', '%s is trusted for %d h now. CrowdSec and fail2ban no longer ban it, its current bans are removed.'), $ip, $hours)
+		: sprintf(L('%s добавлен в доверенные навсегда. CrowdSec и fail2ban его больше не банят, текущие баны сняты.', '%s is trusted permanently now. CrowdSec and fail2ban no longer ban it, its current bans are removed.'), $ip);
 }
 function do_backup() {
 	$db = db();
 	if($db && @$db->query("SELECT 1 FROM backup_job LIMIT 1") !== false) {
 		$r = $db->query("SELECT id FROM backup_job WHERE status IN ('pending','running') LIMIT 1");
-		if($r && $r->num_rows) return 'Бэкап уже идёт или стоит в очереди.';
+		if($r && $r->num_rows) return L('Бэкап уже идёт или стоит в очереди.', 'A backup is already running or queued.');
 		$db->query("INSERT INTO backup_job (action, status, created) VALUES ('run', 'pending', NOW())");
-		return 'Бэкап поставлен в очередь, запустится в течение минуты. Итог видно в панели (System → Backup / Restore), о сбое придёт уведомление.';
+		return L('Бэкап поставлен в очередь, запустится в течение минуты. Итог видно в панели (System → Backup / Restore), о сбое придёт уведомление.',
+			'The backup is queued and will start within a minute. The result is in the panel (System → Backup / Restore), you will get a notification if it fails.');
 	}
-	if(!is_file('/usr/local/sbin/server-backup.sh')) return 'Бэкап не настроен.';
+	if(!is_file('/usr/local/sbin/server-backup.sh')) return L('Бэкап не настроен.', 'Backups are not set up.');
 	exec('nohup /usr/local/sbin/server-backup.sh >/dev/null 2>&1 &');
-	return 'Бэкап запущен. О сбое придёт уведомление.';
+	return L('Бэкап запущен. О сбое придёт уведомление.', 'The backup has started. You will get a notification if it fails.');
 }
-
-$HELP = "Команды:\n/status — состояние сервера\n/bans — активные баны\n/check IP — где забанен IP\n/unban IP — снять баны (с подтверждением)\n/allow IP [часы] — в доверенные, по умолчанию 24 ч, 0 — навсегда (с подтверждением)\n/backup — бэкап сейчас (с подтверждением)";
+function help_text() {
+	return L("Команды:\n/status — состояние сервера\n/bans — активные баны\n/check IP — где забанен IP\n/unban IP — снять баны (с подтверждением)\n/allow IP [часы] — в доверенные, по умолчанию 24 ч, 0 — навсегда (с подтверждением)\n/backup — бэкап сейчас (с подтверждением)",
+		"Commands:\n/status: server status\n/bans: active bans\n/check IP: where an IP is banned\n/unban IP: remove bans (with confirmation)\n/allow IP [hours]: trust an IP, 24 h by default, 0 means forever (with confirmation)\n/backup: back up now (with confirmation)");
+}
 
 // ---------- основной цикл ----------
 $offset_file = $STATE.'/tg-offset';
@@ -190,6 +208,7 @@ while(true) {
 	$cf = readconf();
 	// бот работает только при явно включённом NOTIFY_TG_BOT='y' и заданном токене
 	if(empty($cf['NOTIFY_TG_TOKEN']) || !isset($cf['NOTIFY_TG_BOT']) || $cf['NOTIFY_TG_BOT'] !== 'y') { sleep(30); continue; }
+	$LANG = bot_lang($cf);
 	$allowed = allowed_ids($cf);
 	$offset = (int)@file_get_contents($offset_file);
 	$r = api('getUpdates', array('offset' => $offset, 'timeout' => 25, 'allowed_updates' => array('message', 'callback_query')), 35);
@@ -204,13 +223,13 @@ while(true) {
 		if(isset($u['callback_query'])) {
 			$cq = $u['callback_query']; $uid = (string)$cq['from']['id']; $data = (string)@$cq['data'];
 			$chat = $cq['message']['chat']['id']; $mid = $cq['message']['message_id'];
-			if(!isset($allowed[$uid])) { api('answerCallbackQuery', array('callback_query_id' => $cq['id'], 'text' => 'Нет доступа')); continue; }
+			if(!isset($allowed[$uid])) { api('answerCallbackQuery', array('callback_query_id' => $cq['id'], 'text' => L('Нет доступа', 'No access'))); continue; }
 			if(!preg_match('/^(ok|no):([a-f0-9]{16})$/', $data, $m) || !isset($pending[$m[2]]) || $pending[$m[2]]['uid'] !== $uid) {
-				api('answerCallbackQuery', array('callback_query_id' => $cq['id'], 'text' => 'Подтверждение устарело, повторите команду'));
+				api('answerCallbackQuery', array('callback_query_id' => $cq['id'], 'text' => L('Подтверждение устарело, повторите команду', 'The confirmation has expired, send the command again')));
 				continue;
 			}
 			$p = $pending[$m[2]]; unset($pending[$m[2]]);
-			if($m[1] === 'no') { $res = 'Отменено.'; audit($uid, $p['action'].'_cancel', implode(' ', $p['args'])); }
+			if($m[1] === 'no') { $res = L('Отменено.', 'Cancelled.'); audit($uid, $p['action'].'_cancel', implode(' ', $p['args'])); }
 			else {
 				if($p['action'] === 'unban')      $res = do_unban($p['args'][0]);
 				elseif($p['action'] === 'allow')  $res = do_allow($p['args'][0], (int)$p['args'][1], $uid);
@@ -237,7 +256,8 @@ while(true) {
 			// незнакомцу — только его chat id и только на /start, не чаще раза в 10 минут
 			if(preg_match('#^/start#', $text) && (!isset($replied_unknown[$uid]) || $replied_unknown[$uid] < time() - 600)) {
 				$replied_unknown[$uid] = time();
-				say($chat['id'], "Ваш chat id: {$chat['id']}\nЧтобы получать уведомления и управлять сервером, админ должен добавить его в панели ISPConfig: System → Notifications.");
+				say($chat['id'], sprintf(L("Ваш chat id: %s\nЧтобы получать уведомления и управлять сервером, админ должен добавить его в панели ISPConfig: System → Notifications.",
+					"Your chat id: %s\nTo get notifications and manage the server, the admin has to add it in the ISPConfig panel: System → Notifications."), $chat['id']));
 			}
 			blog("незнакомец $uid ({$chat['id']}): ".mb_substr($text, 0, 60));
 			continue;
@@ -245,24 +265,27 @@ while(true) {
 		if($text === '' || $text[0] !== '/') continue;
 		$a = preg_split('/\s+/', $text); $cmd = strtolower(preg_replace('/@.*$/', '', $a[0]));
 		blog("команда от $uid: ".mb_substr($text, 0, 80));
-		if($cmd === '/start' || $cmd === '/help') { say($chat['id'], $HELP); continue; }
+		if($cmd === '/start' || $cmd === '/help') { say($chat['id'], help_text()); continue; }
 		if($cmd === '/status') { say($chat['id'], cmd_status()); audit($uid, 'status', ''); continue; }
 		if($cmd === '/bans')   { say($chat['id'], cmd_bans()); audit($uid, 'bans', ''); continue; }
 		if($cmd === '/check')  { say($chat['id'], cmd_check(isset($a[1]) ? $a[1] : '')); audit($uid, 'check', isset($a[1]) ? $a[1] : ''); continue; }
 		$q = null; $args = array();
 		if($cmd === '/unban') {
-			if(!isset($a[1]) || !valid_ip($a[1])) { say($chat['id'], 'Нужен IP-адрес: /unban 1.2.3.4'); continue; }
-			$args = array($a[1]); $q = "Снять баны CrowdSec и fail2ban с {$a[1]}?";
+			if(!isset($a[1]) || !valid_ip($a[1])) { say($chat['id'], L('Нужен IP-адрес: /unban 1.2.3.4', 'An IP address is needed: /unban 1.2.3.4')); continue; }
+			$args = array($a[1]); $q = sprintf(L('Снять баны CrowdSec и fail2ban с %s?', 'Remove CrowdSec and fail2ban bans from %s?'), $a[1]);
 		} elseif($cmd === '/allow') {
-			if(!isset($a[1]) || !valid_ip($a[1])) { say($chat['id'], 'Нужен IP-адрес: /allow 1.2.3.4 [часы]'); continue; }
+			if(!isset($a[1]) || !valid_ip($a[1])) { say($chat['id'], L('Нужен IP-адрес: /allow 1.2.3.4 [часы]', 'An IP address is needed: /allow 1.2.3.4 [hours]')); continue; }
 			$hours = isset($a[2]) ? $a[2] : '24';
-			if(!ctype_digit($hours) || (int)$hours > 8760) { say($chat['id'], 'Срок — целое число часов от 0 до 8760 (0 — навсегда).'); continue; }
-			$args = array($a[1], (int)$hours); $q = "Добавить {$a[1]} в доверенные ".((int)$hours > 0 ? "на $hours ч" : 'навсегда').'? Его перестанут банить CrowdSec и fail2ban.';
+			if(!ctype_digit($hours) || (int)$hours > 8760) { say($chat['id'], L('Срок — целое число часов от 0 до 8760 (0 — навсегда).', 'The period is a whole number of hours from 0 to 8760 (0 means forever).')); continue; }
+			$args = array($a[1], (int)$hours);
+			$q = (int)$hours > 0
+				? sprintf(L('Добавить %s в доверенные на %d ч? Его перестанут банить CrowdSec и fail2ban.', 'Trust %s for %d h? CrowdSec and fail2ban will stop banning it.'), $a[1], (int)$hours)
+				: sprintf(L('Добавить %s в доверенные навсегда? Его перестанут банить CrowdSec и fail2ban.', 'Trust %s permanently? CrowdSec and fail2ban will stop banning it.'), $a[1]);
 		} elseif($cmd === '/backup') {
-			$q = 'Запустить бэкап сейчас?';
-		} else { say($chat['id'], "Неизвестная команда.\n\n".$HELP); continue; }
+			$q = L('Запустить бэкап сейчас?', 'Start a backup now?');
+		} else { say($chat['id'], L('Неизвестная команда.', 'Unknown command.')."\n\n".help_text()); continue; }
 		$tok = bin2hex(random_bytes(8));
 		$pending[$tok] = array('uid' => $uid, 'action' => ltrim($cmd, '/'), 'args' => $args, 'question' => $q, 'expires' => time() + 120);
-		say($chat['id'], $q."\n(кнопка действует 2 минуты)", array(array(array('text' => 'Подтвердить', 'callback_data' => 'ok:'.$tok), array('text' => 'Отмена', 'callback_data' => 'no:'.$tok))));
+		say($chat['id'], $q."\n".L('(кнопка действует 2 минуты)', '(the button works for 2 minutes)'), array(array(array('text' => L('Подтвердить', 'Confirm'), 'callback_data' => 'ok:'.$tok), array('text' => L('Отмена', 'Cancel'), 'callback_data' => 'no:'.$tok))));
 	}
 }
