@@ -4,7 +4,7 @@
 возможностями. Обновиться: `luckyctl self-update`, вернуться назад:
 `luckyctl rollback luckystack`.
 
-## Не выпущено
+## 0.1.13 — 2026-11-26
 
 - Сборка nginx проверяет исходники. У nginx, OpenSSL и PCRE2 проверяется подпись автора,
   у остальных архивов контрольная сумма, а модули brotli, headers-more, zstd, set-misc и vts
