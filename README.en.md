@@ -35,8 +35,9 @@ in English too (Add-ons → Notifications → Notification language).
 
 Everything except the base is a checkbox in the wizard.
 
-Apache is hidden in the wizard for now. With it you only get the base, without the
-extras, so full Apache support will come in a later release.
+The web server is your choice: nginx, which I build from source, or Apache from packages
+if your sites need .htaccess. Apache gets the same hardening as nginx, plus a WAF on
+ModSecurity with the OWASP CRS rules. By default the WAF only watches and logs.
 
 ## What comes on top
 
