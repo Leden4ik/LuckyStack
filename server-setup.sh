@@ -409,6 +409,18 @@ run_wizard() {
 		ui_info "Веб-сервер: nginx, собирается из исходников (HTTP/3, Brotli)."
 	fi
 
+	# --- Apache: откуда ставить ---
+	if [[ "$WEBSERVER" == "apache" ]]; then
+		local _os_name="Debian"; [[ "${OS_ID:-debian}" == "ubuntu" ]] && _os_name="Ubuntu"
+		ui_menu "Откуда ставить Apache" 1 \
+			"Из ${_os_name} — версия дистрибутива, исправления безопасности приходят с обновлениями системы (рекомендуется)" \
+			"Свежий от Sury (packages.sury.org) — последняя 2.4.x раньше, чем в дистрибутиве"
+		case "$UI_MENU_CHOICE" in
+			2) config_set APACHE_SOURCE sury ;;
+			*) config_set APACHE_SOURCE distro ;;
+		esac
+	fi
+
 	# --- nginx: канал + профиль сборки + модули ---
 	if [[ "$WEBSERVER" == "nginx" ]]; then
 		ui_menu "Какую версию nginx собирать" 1 \
@@ -1088,18 +1100,19 @@ run_wizard() {
 		fi
 	fi
 
-	# Что отдавать по IP / неизвестному домену на :80 (default-сервер nginx).
-	if [[ "${WEBSERVER:-nginx}" == "nginx" ]]; then
-		ui_menu "Доступ к сайту по IP (http://IP/ на :80)" 1 \
-			"Лендинг — стартовая /var/www/html (roundcube/phpmyadmin доступны по IP)" \
-			"Редирект на домен (301 → https://${SERVER_FQDN:-FQDN}); нужен публичный FQDN" \
-			"Ничего (444) — по IP сайт не открывается (только по домену)"
-		case "$UI_MENU_CHOICE" in
-			1) config_set HTTP_IP_POLICY landing ;;
-			2) config_set HTTP_IP_POLICY redirect ;;
-			3) config_set HTTP_IP_POLICY deny ;;
-		esac
-	fi
+	# Что отдавать по IP / неизвестному домену на :80 (сайт по умолчанию nginx или Apache).
+	# nginx рвёт соединение (444), Apache так не умеет и отвечает 403.
+	local _deny_txt="Ничего (444) — по IP сайт не открывается (только по домену)"
+	[[ "${WEBSERVER:-nginx}" == "apache" ]] && _deny_txt="Ничего (403) — по IP сайт не открывается (только по домену)"
+	ui_menu "Доступ к сайту по IP (http://IP/ на :80)" 1 \
+		"Лендинг — стартовая /var/www/html (roundcube/phpmyadmin доступны по IP)" \
+		"Редирект на домен (301 → https://${SERVER_FQDN:-FQDN}); нужен публичный FQDN" \
+		"$_deny_txt"
+	case "$UI_MENU_CHOICE" in
+		1) config_set HTTP_IP_POLICY landing ;;
+		2) config_set HTTP_IP_POLICY redirect ;;
+		3) config_set HTTP_IP_POLICY deny ;;
+	esac
 
 	# HTTP/3 (QUIC) для панели/apps — только если nginx собран с поддержкой HTTP/3.
 	# Устаревший «listen … http2» в любом случае будет исправлен на «http2 on;».
@@ -1186,12 +1199,12 @@ run_wizard() {
 		config_set SSH_HARDEN n
 	fi
 
-	# Усиление шаблонов сайтов ISPConfig (conf-custom). Необязательно и для опытных:
-	# правит «живой» шаблон nginx_vhost.conf.master, по умолчанию ВЫКЛ. ТОЛЬКО для nginx —
-	# фича редактирует nginx-шаблон (HTTP/3, security-заголовки и т.п.); на Apache этого
-	# шаблона нет и она ничего не делает, поэтому и вопрос не показываем.
-	if [[ "${WEBSERVER:-nginx}" == "nginx" ]] && \
-		ui_confirm "Усилить шаблоны сайтов ISPConfig (HTTP/3, security-заголовки, запрет секретных/скрытых файлов, server_tokens off)?" n; then
+	# Усиление сайтов. nginx: правит «живой» шаблон nginx_vhost.conf.master (conf-custom), по
+	# умолчанию ВЫКЛ. Apache: общий файл zz-luckystack-hardening.conf; версия, TRACE и скрытые файлы
+	# закрываются всегда, а этот вопрос добавляет заголовки безопасности и запрет секретных файлов.
+	local _harden_q="Усилить шаблоны сайтов ISPConfig (HTTP/3, security-заголовки, запрет секретных/скрытых файлов, server_tokens off)?"
+	[[ "${WEBSERVER:-nginx}" == "apache" ]] && _harden_q="Добавить сайтам заголовки безопасности и запрет секретных файлов (дампы .sql, .bak, composer.json и т.п.)?"
+	if ui_confirm "$_harden_q" n; then
 		config_set HARDEN_CONF_CUSTOM y
 		# HSTS — отдельно: принудительный HTTPS, ОПАСЕН без валидного сертификата
 		# на всех поддоменах (браузер запомнит и заблокирует HTTP). По умолчанию нет.

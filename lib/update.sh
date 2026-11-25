@@ -177,6 +177,8 @@ run_update_mode() {
 		declare -F ch_begin >/dev/null && ch_begin "обновление: системные пакеты (apt upgrade)"
 		# метапакеты php-* не должны тянуть новую ветку PHP (см. _php_pin_meta)
 		declare -F _php_pin_meta >/dev/null && ( _php_pin_meta )
+		# Apache: источник пакетов (APACHE_SOURCE) до apt upgrade, чтобы смена на Sury сразу подтянула его версию
+		[[ "${WEBSERVER:-nginx}" == "apache" ]] && declare -F _apache_repo >/dev/null && ( _apache_repo )
 		apt_update
 		sys_run "apt upgrade" apt-get -y -o Dpkg::Options::=--force-confold upgrade || \
 			ui_warn "apt upgrade завершился с замечаниями — см. ${SETUP_LOG}."
@@ -227,6 +229,8 @@ run_update_mode() {
 		declare -F apply_ssh_safe >/dev/null && _upd_run "SSH: безопасные настройки (вход по паролю не трогаю)" apply_ssh_safe
 		declare -F _security_service_hardening >/dev/null && _upd_run "Ограничения служб systemd (если SEC_SERVICE_HARDEN=y)" _security_service_hardening
 		declare -F _nginx_tight_timeouts >/dev/null && [[ "${WEBSERVER:-nginx}" == "nginx" ]] && _upd_run "nginx: таймауты клиентов" _nginx_tight_timeouts
+		declare -F _apache_apply_all >/dev/null && [[ "${WEBSERVER:-nginx}" == "apache" ]] \
+			&& _upd_run "Apache: усиление, таймауты, brotli, сайт по умолчанию (по IP: ${HTTP_IP_POLICY:-landing})" _apache_apply_all
 		declare -F _security_journald >/dev/null && _upd_run "Предел журнала systemd (${JOURNAL_MAX:-500M})" _security_journald
 		declare -F _security_rkhunter_apt >/dev/null && _upd_run "rkhunter: база после каждого apt" _security_rkhunter_apt
 		declare -F _security_aide >/dev/null && _upd_run "AIDE (если SEC_AIDE=y)" _security_aide

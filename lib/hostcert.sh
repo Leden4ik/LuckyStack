@@ -342,6 +342,8 @@ APA
 		web_reload; rm -f "${conf}.bak"
 		ui_success "Сайт хоста по FQDN включён: ${UI_C}https://${fqdn}/roundcube${UI_NC} (Apache, LE-серт)."
 		declare -F _ispconfig_app_links >/dev/null && _ispconfig_app_links
+		# сайт по умолчанию теперь отвечает сертификатом хоста и переводит http://FQDN на https
+		declare -F _apache_default_vhost >/dev/null && _apache_default_vhost
 	else
 		a2dissite luckystack-host-fqdn >>"$SETUP_LOG" 2>&1 || true
 		if [[ -f "${conf}.bak" ]]; then mv -f "${conf}.bak" "$conf"; a2ensite luckystack-host-fqdn >>"$SETUP_LOG" 2>&1 || true

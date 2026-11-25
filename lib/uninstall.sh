@@ -437,6 +437,9 @@ uninstall_webserver() {
 
 	if [[ $have_apache -eq 1 ]]; then
 		_un_stop apache2; _un_purge 'apache2*' 'libapache2-mod-*'; _un_rm /etc/apache2
+		# свежий Apache от Sury (APACHE_SOURCE=sury)
+		_un_rm /etc/apt/sources.list.d/apache2-sury.list /etc/apt/trusted.gpg.d/apache2-sury.gpg \
+		       /etc/apt/sources.list.d/ondrej-ubuntu-apache2-*.list /etc/apt/sources.list.d/ondrej-ubuntu-apache2-*.sources
 	fi
 	if [[ $have_nginx -eq 1 ]]; then
 		# nginx — кастомная сборка: сервис, бинарь, equivs-пакет, исходники

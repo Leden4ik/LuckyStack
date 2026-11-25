@@ -27,6 +27,7 @@ stage_tuning() {
 		ui_info "${UI_D}[dry-run]${UI_NC} MariaDB: innodb_buffer_pool ~$(_tune_pool_mb "$ram_mb")M, max_connections, log_file_size"
 		ui_info "${UI_D}[dry-run]${UI_NC} PHP: OPcache + memory_limit для всех версий"
 		ui_info "${UI_D}[dry-run]${UI_NC} Postfix: message_size_limit 50M"
+		[[ "${WEBSERVER:-nginx}" == "apache" ]] && ui_info "${UI_D}[dry-run]${UI_NC} Apache: mpm_event по объёму памяти"
 		ui_info "${UI_D}[dry-run]${UI_NC} LimitNOFILE=65535 для mariadb/postfix/dovecot (systemd-override) + limits.conf"
 		ui_success "Авто-тюнинг (имитация) выполнен."
 		return 0
@@ -36,6 +37,7 @@ stage_tuning() {
 	_tune_mariadb "$ram_mb" "$cpu"
 	_tune_php "$ram_mb"
 	_tune_postfix
+	[[ "${WEBSERVER:-nginx}" == "apache" ]] && declare -F _apache_mpm_tune >/dev/null && _apache_mpm_tune "$ram_mb"
 
 	ui_success "Авто-тюнинг применён (RAM ${ram_mb} МБ, CPU ${cpu})."
 	log "tuning: ram=${ram_mb} cpu=${cpu} pool=$(_tune_pool_mb "$ram_mb")M"
