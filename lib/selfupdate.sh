@@ -75,7 +75,8 @@ _su_show_installed() {
 		when="$(. "$rel/.release" 2>/dev/null; printf '%s' "${INSTALLED:-}")"
 	fi
 	ui_info "Установлена: LuckyStack ${VERSION:-?}${rel:+ (${rel})}"
-	[[ -n "$origin" ]] && ui_info "Откуда: ${origin}${when:+, поставлен ${when}}"
+	# источник записан при установке по-русски, переводим при показе
+	[[ -n "$origin" ]] && ui_info "Откуда: $(t "${origin}")${when:+, поставлен ${when}}"
 	return 0
 }
 

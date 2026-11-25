@@ -224,7 +224,7 @@ _dbadmin_restrict_nginx() {
 		systemctl reload nginx >>"$SETUP_LOG" 2>&1 || true
 		rm -f "${snip}.bak"
 		local b; for b in "${apps_baks[@]}"; do rm -f "$b.dbacl.bak"; done
-		ui_success "Веб-админка БД ограничена$([[ "$fqonly" == y ]] && echo ": только по FQDN")$([[ -n "$ips" ]] && echo " · IP: ${ips}")."
+		ui_success "Веб-админка БД ограничена$([[ "$fqonly" == y ]] && echo ": $(t "только по FQDN")")$([[ -n "$ips" ]] && echo " · IP: ${ips}")."
 	else
 		if [[ -f "${snip}.bak" ]]; then mv -f "${snip}.bak" "$snip"; else rm -f "$snip"; fi
 		local b; for b in "${apps_baks[@]}"; do [[ -f "$b.dbacl.bak" ]] && mv -f "$b.dbacl.bak" "$b"; done
@@ -268,7 +268,7 @@ _dbadmin_restrict_apache() {
 	a2enconf luckystack-dbadmin-restrict >>"$SETUP_LOG" 2>&1 || true
 	if apache2ctl configtest >>"$SETUP_LOG" 2>&1; then
 		systemctl reload apache2 >>"$SETUP_LOG" 2>&1 || true
-		ui_success "Веб-админка БД ограничена (Apache)$([[ "$fqonly" == y ]] && echo ": только по FQDN")$([[ -n "$ips" ]] && echo " · IP: ${ips}")."
+		ui_success "Веб-админка БД ограничена (Apache)$([[ "$fqonly" == y ]] && echo ": $(t "только по FQDN")")$([[ -n "$ips" ]] && echo " · IP: ${ips}")."
 	else
 		a2disconf luckystack-dbadmin-restrict >>"$SETUP_LOG" 2>&1 || true
 		rm -f "$conf"; systemctl reload apache2 >>"$SETUP_LOG" 2>&1 || true

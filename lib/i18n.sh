@@ -18,7 +18,11 @@
 # =============================================================================
 
 declare -gA _I18N=()          # ["исходная русская строка"]="translation"
+# Шаблоны: ключи с %s на месте подставляемых значений ("Обновлён nginx до %s"). Собираются при
+# загрузке языка: регулярное выражение, буквальное начало до первого %s и перевод.
+declare -ga _I18T_RE=() _I18T_PRE=() _I18T_VAL=()
 UI_LANG="${UI_LANG:-ru}"      # текущий язык интерфейса
+_I18N_LANG=ru                 # загруженный язык (см. i18n_load)
 
 # Каталог языковых файлов (LANG_DIR можно переопределить; по умолчанию рядом со скриптом).
 : "${LANG_DIR:=${SCRIPT_DIR:-.}/lang}"
@@ -29,11 +33,53 @@ i18n_load() {
 	local lang="${1:-$UI_LANG}"
 	_I18N=()
 	UI_LANG="$lang"
+	# язык, который реально загружен: config_load потом перечитывает setup.conf и может
+	# перезаписать UI_LANG, а перевод должен остаться тем, что выбрали (--lang или мастер)
+	_I18N_LANG="$lang"
 	[[ "$lang" == "ru" ]] && return 0          # русский — исходный, файл не нужен
 	local f="$LANG_DIR/${lang}.lng"
 	[[ -r "$f" ]] || return 0                  # нет перевода — молча остаёмся на русском
 	# shellcheck disable=SC1090
 	source "$f" 2>/dev/null || true
+	_i18n_build_templates
+}
+
+# Ключи с %s → регулярные выражения (одним sed на все ключи: экранировать спецсимволы ERE,
+# %s заменить на (.*)). Длинное буквальное начало проверяется раньше короткого: так
+# «Обновлён nginx до %s» выигрывает у «Обновлён %s».
+_i18n_build_templates() {
+	_I18T_RE=(); _I18T_PRE=(); _I18T_VAL=()
+	local k keys=() res line i=0
+	for k in "${!_I18N[@]}"; do [[ "$k" == *"%s"* && "$k" != *$'\n'* ]] && keys+=("$k"); done
+	((${#keys[@]})) || return 0
+	# сортировка: длиннее буквальное начало, при равном — больше постоянного текста (точнее шаблон)
+	mapfile -t keys < <(for k in "${keys[@]}"; do p="${k%%"%s"*}"; l="${k//"%s"/}"; printf '%06d\t%06d\t%s\n' "${#p}" "${#l}" "$k"; done | sort -r | cut -f3-)
+	mapfile -t res < <(printf '%s\n' "${keys[@]}" | sed -e 's/[][\.^$*+?(){}|/]/\\&/g' -e 's/%s/(.*)/g')
+	for line in "${res[@]}"; do
+		_I18T_RE+=("^${line}\$")
+		_I18T_PRE+=("${keys[$i]%%"%s"*}")
+		_I18T_VAL+=("${_I18N[${keys[$i]}]}")
+		i=$((i + 1))
+	done
+}
+
+# Перевод строки без оформления: точное совпадение, потом шаблоны. Пусто и код 1, если перевода нет.
+_i18n_tr() {
+	local s="$1" i p v out cap
+	if [[ -n "${_I18N[$s]+x}" ]]; then printf '%s' "${_I18N[$s]}"; return 0; fi
+	for i in "${!_I18T_RE[@]}"; do
+		p="${_I18T_PRE[$i]}"
+		[[ -z "$p" || "${s:0:${#p}}" == "$p" ]] || continue
+		[[ "$s" =~ ${_I18T_RE[$i]} ]] || continue
+		v="${_I18T_VAL[$i]}"; out=""
+		for cap in "${BASH_REMATCH[@]:1}"; do
+			[[ "$v" == *"%s"* ]] || break
+			out+="${v%%"%s"*}${cap}"; v="${v#*"%s"}"
+		done
+		printf '%s' "${out}${v}"
+		return 0
+	done
+	return 1
 }
 
 # i18n_langs — список доступных кодов языков (ru + найденные lang/*.lng), по одному в строке.
@@ -50,9 +96,22 @@ i18n_langs() {
 # НЕ добавляет перевод строки: пригодно для подстановки в кавычках.
 t() {
 	local s="$1"
-	if [[ "$UI_LANG" != "ru" && -n "${_I18N[$s]:-}" ]]; then
-		printf '%s' "${_I18N[$s]}"
-	else
-		printf '%s' "$s"
-	fi
+	if [[ "${_I18N_LANG:-ru}" == "ru" ]] || ((${#_I18N[@]} == 0)); then printf '%s' "$s"; return 0; fi
+	if [[ -n "${_I18N[$s]+x}" ]]; then printf '%s' "${_I18N[$s]}"; return 0; fi
+	# оформление в начале (отступ, цвет, значок ✓ ! ✗ i • →) не переводим: отделяем и
+	# переводим остальное. Цвета хранятся текстом '\033[...m' или настоящим ESC.
+	local head="" body="$s" r nx
+	local re_sp='^[[:space:]]+' re_col='^(\\033|\\e|'$'\033'')\[[0-9;]*m' re_mark='^([✓✗!•→i]|\[[^]]{1,2}\])(.)'
+	while :; do
+		if [[ "$body" =~ $re_sp || "$body" =~ $re_col ]]; then
+			head+="${BASH_REMATCH[0]}"; body="${body:${#BASH_REMATCH[0]}}"
+		elif [[ "$body" =~ $re_mark ]]; then
+			# значок отделяем, только если за ним пробел или код цвета, а не продолжение слова
+			nx="${BASH_REMATCH[2]}"
+			[[ "$nx" == " " || "$nx" == "\\" || "$nx" == $'\033' ]] || break
+			head+="${BASH_REMATCH[1]}"; body="${body:${#BASH_REMATCH[1]}}"
+		else break; fi
+	done
+	if [[ -n "$body" ]] && r="$(_i18n_tr "$body")"; then printf '%s' "${head}${r}"
+	else printf '%s' "$s"; fi
 }

@@ -14,6 +14,11 @@ PANEL_PORT="${PANEL_PORT:-8080}"
 SERVER_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2; exit}')"
 M=(mariadb --defaults-extra-file=/root/.my.cnf)
 
+# Тесты разбирают вывод по русским словам, поэтому luckyctl всегда по-русски, какой бы язык
+# ни был выбран на сервере (функция видна и во вложенных bash -c)
+luckyctl() { command luckyctl --lang ru "$@"; }
+export -f luckyctl
+
 E2E_OK=0
 E2E_FAIL=0
 E2E_FAILED=()

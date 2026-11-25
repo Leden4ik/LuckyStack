@@ -36,4 +36,9 @@ k_get="$(grep -m1 -oP "^SIGNERS='\K[^']+" get.sh 2>/dev/null)"
 # 6. Лицензия на месте
 [[ -s LICENSE ]] && grep -q 'MIT License' LICENSE && ok "LICENSE (MIT)" || bad "нет LICENSE или это не MIT"
 
+# 7. Файлы перевода подключаются как bash: синтаксис должен быть цел, иначе язык молча не загрузится
+for f in lang/*.lng; do
+	bash -n "$f" 2>/dev/null && ok "${f}: синтаксис" || bad "${f}: ошибка синтаксиса"
+done
+
 exit "$fail"

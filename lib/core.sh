@@ -32,7 +32,7 @@ declare -ga STAGE_KEYS
 register_stage() {
 	local key="$1" label="$2" type="${3:-core}"
 	STAGE_KEYS+=("$key")
-	STAGE_LABELS["$key"]="$label"
+	STAGE_LABELS["$key"]="$(declare -F t >/dev/null && t "$label" || printf '%s' "$label")"
 	STAGE_TYPE["$key"]="$type"
 }
 

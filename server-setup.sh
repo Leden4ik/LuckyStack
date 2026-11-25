@@ -276,7 +276,13 @@ fi
 [[ -f "$LIB_DIR/layout.sh" ]] && . "$LIB_DIR/layout.sh"
 # Само-обновление установщика с GitHub (--self-update / --check-update).
 [[ -f "$LIB_DIR/selfupdate.sh" ]] && . "$LIB_DIR/selfupdate.sh"
-[[ -n "${UI_LANG_ARG:-}" ]] && UI_LANG="$UI_LANG_ARG"
+# Язык: --lang > сохранённый в setup.conf (выбран в мастере) > UI_LANG окружения > ru.
+# Сохранённый читаем здесь же, иначе команды вроде luckyctl check шли бы по-русски.
+if [[ -n "${UI_LANG_ARG:-}" ]]; then UI_LANG="$UI_LANG_ARG"
+else
+	_saved_lang="$(grep -m1 -oP '^UI_LANG=["'"'"']?\K[a-z]+' "$CONFIG_FILE" 2>/dev/null)"
+	[[ -n "$_saved_lang" ]] && UI_LANG="$_saved_lang"
+fi
 type i18n_load >/dev/null 2>&1 && i18n_load "${UI_LANG:-ru}"
 
 # Этапы, реализованные в отдельных native-модулях. Подключаем те, что существуют;
@@ -375,7 +381,7 @@ _wizard_nginx_custom() {
 run_wizard() {
 	clear 2>/dev/null || true
 	ui_header "Мастер настройки сервера"
-	echo -e "${UI_D}Ответы сохраняются в setup.conf и переиспользуются при --resume.${UI_NC}"
+	echo -e "${UI_D}$(t "Ответы сохраняются в setup.conf и переиспользуются при --resume.")${UI_NC}"
 
 	config_init_header
 
@@ -1279,20 +1285,20 @@ show_config_summary() {
 		done
 		ui_box_line "nginx:         ${UI_W}${NGINX_CHANNEL:-stable} · профиль ${NGINX_PROFILE:-recommended}${UI_NC}"
 		ui_box_line "  модули:      ${UI_D}${_ngmods:-—}${UI_NC}"
-		[[ "${NGX_HTTP3:-y}" == "y" ]] && ui_box_line "  OpenSSL:     ${UI_W}${OPENSSL_VER:-ветка ${OPENSSL_BRANCH:-3.5}}${UI_NC}"
-		ui_box_line "GeoIP2:        ${UI_W}${geoip_state}${UI_NC}"
+		[[ "${NGX_HTTP3:-y}" == "y" ]] && ui_box_line "  OpenSSL:     ${UI_W}${OPENSSL_VER:-$(t "ветка") ${OPENSSL_BRANCH:-3.5}}${UI_NC}"
+		ui_box_line "GeoIP2:        ${UI_W}$(t "${geoip_state}")${UI_NC}"
 	fi
 	ui_box_line "PHP:           ${UI_W}${PHP_VERSIONS:-—}${UI_NC} (по умолчанию ${PHP_DEFAULT:-—})"
 	local mdb="${MARIADB_SOURCE:-official}"
 	if [[ "$mdb" == "official" ]]; then
-		if [[ -n "${MARIADB_VERSION:-}" ]]; then mdb="офиц. репо MariaDB ${MARIADB_VERSION}"
-		else mdb="офиц. репо MariaDB (авто: последняя LTS)"; fi
-	else mdb="репо Debian"; fi
+		if [[ -n "${MARIADB_VERSION:-}" ]]; then mdb="$(t "офиц. репо MariaDB") ${MARIADB_VERSION}"
+		else mdb="$(t "офиц. репо MariaDB (авто: последняя LTS)")"; fi
+	else mdb="$(t "репо Debian")"; fi
 	ui_box_line "MariaDB:       ${UI_W}${mdb}${UI_NC}"
-	ui_box_line "Redis:         ${UI_W}$([[ "${INSTALL_REDIS:-y}" == "y" ]] && echo "вкл" || echo "выкл")${UI_NC}"
+	ui_box_line "Redis:         ${UI_W}$([[ "${INSTALL_REDIS:-y}" == "y" ]] && echo "$(t "вкл")" || echo "$(t "выкл")")${UI_NC}"
 	ui_box_line "Компоненты:    ${UI_W}${COMPONENTS:-—}${UI_NC}"
 	[[ " ${COMPONENTS:-} " == *" webmail "* ]] && \
-		ui_box_line "Roundcube:     ${UI_W}$([[ "${RC_SOURCE:-upstream}" == "debian" ]] && echo "пакет Debian" || echo "с сайта разработчиков, ветка ${RC_BRANCH:-1.6}")${UI_NC}"
+		ui_box_line "Roundcube:     ${UI_W}$([[ "${RC_SOURCE:-upstream}" == "debian" ]] && echo "$(t "пакет Debian")" || echo "$(t "с сайта разработчиков, ветка") ${RC_BRANCH:-1.6}")${UI_NC}"
 	local _utn; _utn=$(echo ${UTILS:-} | wc -w)
 	ui_box_line "Утилиты:       ${UI_W}${_utn} выбрано${UI_NC} (${UTILS:-—})"
 	ui_box_line "FQDN:          ${UI_W}${SERVER_FQDN:-—}${UI_NC}"

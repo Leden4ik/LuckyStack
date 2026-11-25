@@ -541,7 +541,7 @@ INI
 _upd_run() {
 	local label="$1" fn="$2" rc=0
 	echo ""
-	ui_step "Обновление: ${label}"
+	ui_step "Обновление: $(t "${label}")"
 	declare -F ch_begin >/dev/null && ch_begin "обновление: ${label}"
 	( "$fn" ) || rc=$?
 	declare -F ch_end >/dev/null && ch_end
