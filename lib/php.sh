@@ -483,8 +483,12 @@ run_php_remove() {
 	cli_php="$(readlink -f /usr/bin/php 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
 	[[ -n "$cli_php" ]] || cli_php="$(php -v 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)"
 
-	local haveispc=0
+	local haveispc=0 def_php=""
 	[[ -f /usr/local/ispconfig/server/lib/config.inc.php ]] && declare -F _ispc_mysql >/dev/null && haveispc=1
+	# версия «PHP по умолчанию» для сайтов ISPConfig (php_fpm_init_script=phpX.Y-fpm)
+	((haveispc)) && def_php="$(_ispc_mysql -N -s -r -e "SELECT config FROM server WHERE server_id=1" 2>/dev/null \
+		| grep -oP '^php_fpm_init_script=php\K[0-9]+\.[0-9]+(?=-fpm)' | head -1)"
+	[[ -n "$def_php" && "$def_php" != "$panel_php" ]] && ui_info "PHP по умолчанию для сайтов: ${def_php}."
 
 	# checklist только из удаляемых; защищённые — как инфо
 	local args=() cnt reason
@@ -493,7 +497,17 @@ run_php_remove() {
 		[[ "$v" == "$panel_php" ]] && reason="панель"
 		[[ "$v" == "$cli_php"   ]] && reason="${reason:+$reason, }CLI по умолчанию"
 		cnt=0
-		((haveispc)) && cnt="$(_ispc_mysql -N -B -e "SELECT COUNT(*) FROM web_domain WHERE fastcgi_php_version='PHP ${v}';" 2>/dev/null | tr -dc '0-9')"
+		# версию сайта ISPConfig 3.3 хранит в server_php_id (поля fastcgi_php_version, по которому
+		# считали раньше, в 3.3 нет: запрос падал, и защита пропускала версию с живыми сайтами).
+		# server_php_id=0 — «PHP по умолчанию», его версия в настройках сервера (php_fpm_init_script).
+		if ((haveispc)); then
+			cnt="$(_ispc_mysql -N -B -e "SELECT COUNT(*) FROM web_domain w JOIN server_php p ON p.server_php_id = w.server_php_id WHERE w.php <> 'no' AND p.name = 'PHP ${v}';" 2>/dev/null)"
+			[[ "$cnt" =~ ^[0-9]+$ ]] || { ui_error "Не удалось узнать, какие сайты на PHP ${v}: удалять не буду."; return 1; }
+			if [[ "$v" == "$def_php" ]]; then
+				local c0; c0="$(_ispc_mysql -N -B -e "SELECT COUNT(*) FROM web_domain WHERE php <> 'no' AND server_php_id = 0;" 2>/dev/null)"
+				[[ "$c0" =~ ^[0-9]+$ ]] && cnt=$((cnt + c0))
+			fi
+		fi
 		[[ "${cnt:-0}" -gt 0 ]] && reason="${reason:+$reason, }используют ${cnt} сайт(ов)"
 		if [[ -n "$reason" ]]; then
 			ui_info "PHP ${v} — оставляем (${reason})."
@@ -503,13 +517,23 @@ run_php_remove() {
 	done
 	((${#args[@]})) || { ui_warn "Нет версий, которые можно удалить (все защищены/используются)."; return 0; }
 
-	ui_checklist "Отметьте версии PHP для УДАЛЕНИЯ (пробел — отметить, Enter — далее)" "" "${args[@]}"
-	local sel=" ${UI_CHECK_RESULT//,/ } "
-	[[ "$sel" =~ v[0-9] ]] || { ui_info "Ничего не выбрано — отмена."; return 0; }
+	local sel=""
+	if [[ -n "${PHP_REMOVE_ARG:-}" ]]; then
+		# версия аргументом (luckyctl remove-php 8.3): те же защиты, без списка
+		local _ok=0 _i
+		for ((_i = 0; _i < ${#args[@]}; _i += 2)); do [[ "${args[$_i]}" == "v${PHP_REMOVE_ARG//./_}" ]] && _ok=1; done
+		((_ok)) || { ui_error "PHP ${PHP_REMOVE_ARG}: не установлена или защищена (см. выше), не удаляю."; return 1; }
+		sel=" v${PHP_REMOVE_ARG//./_} "
+	else
+		ui_checklist "Отметьте версии PHP для УДАЛЕНИЯ (пробел — отметить, Enter — далее)" "" "${args[@]}"
+		sel=" ${UI_CHECK_RESULT//,/ } "
+		[[ "$sel" =~ v[0-9] ]] || { ui_info "Ничего не выбрано — отмена."; return 0; }
+	fi
 
 	echo ""
 	ui_warn "Отмеченные версии будут ПОЛНОСТЬЮ удалены (apt purge phpX.Y-*) и убраны из ISPConfig."
-	if declare -F ui_confirm >/dev/null; then ui_confirm "Продолжить удаление?" n || { ui_info "Отменено."; return 0; }; fi
+	# версия, названная аргументом без терминала, и есть подтверждение
+	if [[ -t 0 ]] && declare -F ui_confirm >/dev/null; then ui_confirm "Продолжить удаление?" n || { ui_info "Отменено."; return 0; }; fi
 
 	local rm_list=""
 	for v in "${vers[@]}"; do

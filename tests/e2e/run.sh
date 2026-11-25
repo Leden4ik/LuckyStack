@@ -3,7 +3,14 @@
 # Заводят через API ISPConfig клиента с сайтом, базой, ящиком и DNS-зоной, проверяют, что всё
 # работает, гоняют бэкап с восстановлением и уведомления, а в конце убирают за собой.
 #
-#   bash tests/e2e/run.sh [набор ...]      наборы: hosting restore notify health (по умолчанию все)
+#   bash tests/e2e/run.sh [набор ...]      наборы (по умолчанию все, по порядку):
+#     hosting  клиент с сайтом, базой, ящиком и DNS; сайт, почта, DNS работают
+#     webmail  вход в Roundcube, плагины ISPConfig, запись настройки через их API
+#     php      add-php, сайт на новой версии, защита remove-php, удаление версии
+#     nginx    откат на прошлую сборку и обратно (E2E_NGINX_BUILD=1 — ещё и пересборка)
+#     sites    luckyctl sites замечает поломку и починку, update проверяет сайты
+#     restore  бэкап и восстановление;  notify  уведомления;  health  команды luckyctl
+#   E2E_NOTIFY=1  при ошибках прислать уведомление (для запуска по расписанию)
 #   E2E_KEEP=1 bash tests/e2e/run.sh hosting   оставить демо-клиента (для скриншотов), убрать: run.sh cleanup
 #   tools/e2e.sh root@хост [порт] [набор ...]   то же с рабочей машины
 #
@@ -23,8 +30,9 @@ E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$E2E_DIR/lib.sh"
 
 want=("$@")
-((${#want[@]})) || want=(hosting restore notify health)
-declare -A file=([hosting]=10-hosting.sh [restore]=20-restore.sh [notify]=30-notify.sh [health]=40-health.sh)
+((${#want[@]})) || want=(hosting webmail php nginx sites restore notify health)
+declare -A file=([hosting]=10-hosting.sh [restore]=20-restore.sh [notify]=30-notify.sh [health]=40-health.sh
+	[webmail]=50-webmail.sh [php]=60-php.sh [nginx]=70-nginx.sh [sites]=80-sites.sh)
 
 cleanup_done=0
 e2e_cleanup() {
@@ -53,4 +61,9 @@ fi
 echo
 echo "Итог: OK ${E2E_OK}, FAIL ${E2E_FAIL}"
 ((E2E_FAIL == 0)) || printf '  - %s\n' "${E2E_FAILED[@]}"
+# по расписанию: о провале сообщаем через уведомления сервера
+if [[ "${E2E_NOTIFY:-0}" == 1 ]] && ((E2E_FAIL > 0)) && [[ -x /usr/local/sbin/server-notify.sh ]]; then
+	/usr/local/sbin/server-notify.sh -e monitor -l warn "Сквозные тесты: ошибок ${E2E_FAIL} из $((E2E_OK + E2E_FAIL))" \
+		"$(printf '%s\n' "${E2E_FAILED[@]}")" >/dev/null 2>&1 || true
+fi
 exit $((E2E_FAIL > 0))

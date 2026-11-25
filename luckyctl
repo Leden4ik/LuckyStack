@@ -49,7 +49,7 @@ luckyctl $(version_of "$SS"), команда LuckyStack
   rollback nginx|roundcube|luckystack
                            вернуть прошлую версию; повтор отменяет откат
   add-php [X.Y]            добавить версию PHP
-  remove-php               удалить версию PHP (не даст удалить ту, на которой сайты)
+  remove-php [X.Y]         удалить версию PHP (не даст удалить ту, на которой сайты)
   timezone [пояс]          сменить часовой пояс везде, например Europe/Moscow
 
 Данные

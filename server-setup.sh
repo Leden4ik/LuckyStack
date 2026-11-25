@@ -85,6 +85,7 @@ DO_ROLLBACK=0      # вернуть прошлую версию nginx или Rou
 ROLLBACK_TARGET=""
 DO_PHP_ADD=0       # доустановить версии PHP (интерактивно или --add-php 8.6) и выйти
 PHP_ADD_ARG=""     # версия для --add-php (пусто — выбор из списка)
+PHP_REMOVE_ARG=""  # версия для --remove-php (пусто — выбор из списка)
 DO_TIMEZONE=0      # сменить часовой пояс везде (система, PHP, MariaDB, cron) и выйти
 TZ_ARG=""          # зона для --timezone (пусто — спросить)
 DO_SELF_UPDATE=0   # обновить сам установщик с GitHub (git/curl) и выйти
@@ -217,7 +218,7 @@ while (($#)); do
 		--rollback)    DO_ROLLBACK=1; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then ROLLBACK_TARGET="$2"; shift; fi ;;
 		--adopt)       DO_ADOPT=1 ;;
 		--add-php)     DO_PHP_ADD=1; if [[ "${2:-}" =~ ^[0-9]+\.[0-9]+$ ]]; then PHP_ADD_ARG="$2"; shift; fi ;;
-		--remove-php)  DO_PHP_REMOVE=1 ;;
+		--remove-php)  DO_PHP_REMOVE=1; if [[ "${2:-}" =~ ^[0-9]+\.[0-9]+$ ]]; then PHP_REMOVE_ARG="$2"; shift; fi ;;
 		--timezone)    DO_TIMEZONE=1; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then TZ_ARG="$2"; shift; fi ;;
 		--self-update) DO_SELF_UPDATE=1 ;;
 		--check-update) DO_CHECK_UPDATE=1 ;;
@@ -1696,7 +1697,7 @@ main() {
 	# Удаление выбранных версий PHP (интерактивно, с защитой) — пишет в систему, нужен root
 	if ((DO_PHP_REMOVE)); then
 		require_root
-		if declare -F run_php_remove >/dev/null; then ch_run "remove-php" run_php_remove; exit $?; fi
+		if declare -F run_php_remove >/dev/null; then ch_run "remove-php${PHP_REMOVE_ARG:+ $PHP_REMOVE_ARG}" run_php_remove; exit $?; fi
 		ui_error "lib/php.sh не подключён."; exit 1
 	fi
 
