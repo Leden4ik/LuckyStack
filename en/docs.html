@@ -334,6 +334,7 @@ footer { margin-top: 64px; padding: 22px 0 40px; border-top: 1px solid var(--lin
     <a href="#wizard">Setup wizard</a>
     <a href="#stages">Stages</a>
     <a href="#unattended">Unattended install</a>
+    <a href="#apache">Apache</a>
   </div>
   <div class="group"><span class="label">Running the server</span>
     <a href="#cli">The luckyctl command</a>
@@ -383,7 +384,7 @@ footer { margin-top: 64px; padding: 22px 0 40px; border-top: 1px solid var(--lin
     <div class="tbl"><table>
       <thead><tr><th>Part</th><th>What is installed</th><th>Source</th></tr></thead>
       <tbody>
-        <tr><td>Web server</td><td>nginx with HTTP/3, Brotli, zstd and OpenSSL 3.5 LTS. Full Apache support will come in one of the next releases</td><td class="n">built from source</td></tr>
+        <tr><td>Web server</td><td>nginx with HTTP/3, Brotli, zstd and OpenSSL 3.5 LTS. Or Apache from packages with the ModSecurity WAF, if your sites need .htaccess</td><td class="n">built from source / apt</td></tr>
         <tr><td>PHP</td><td>Several FPM versions at once, from 7.4 to 8.6, the version is chosen per site</td><td class="n">Sury</td></tr>
         <tr><td>Databases</td><td>MariaDB latest LTS, Redis. PostgreSQL if you want it</td><td class="n">mariadb.org</td></tr>
         <tr><td>Mail</td><td>Postfix and Dovecot, Rspamd and ClamAV, Roundcube webmail, DKIM, SPF and DMARC</td><td class="n">apt / roundcube.net</td></tr>
@@ -483,6 +484,7 @@ dig +short server.example.com
       <tbody>
         <tr><td>Server name and time zone</td><td class="n">from the system</td><td>The full name with an A record. If the hosting provider already set a name, the wizard fills it in for you. The time zone is set everywhere at once: system, PHP, MariaDB, ISPConfig</td></tr>
         <tr><td>Install profile</td><td class="n">Web + mail</td><td>Minimal, Web + mail, Full or Custom. A profile just pre-selects components, you can adjust them</td></tr>
+        <tr><td>Web server</td><td class="n">nginx</td><td>nginx is built from source with HTTP/3 and Brotli. Apache is installed from packages, understands .htaccess and has a WAF. For Apache the wizard then asks where to install it from and which WAF mode to use, see the <a href="#apache">Apache</a> section</td></tr>
         <tr><td>Which nginx version to build</td><td class="n">stable</td><td>mainline is newer, but rarely needed</td></tr>
         <tr><td>nginx feature set</td><td class="n">Recommended</td><td>HTTP/3, Brotli, zstd and speedups. Full adds traffic statistics, Custom lets you pick modules by hand</td></tr>
         <tr><td>Which OpenSSL to build</td><td class="n">3.5 LTS</td><td>3.5 is supported until 2030, the best choice for a server you don't want to touch</td></tr>
@@ -568,6 +570,43 @@ luckyctl install --from security   <span class="c"># start from a stage and go t
 <span class="k">NOTIFY_EMAIL</span>=<span class="s">'admin@example.org'</span></pre>
     <pre class="code">luckyctl install --unattended</pre>
     <p>The full list of settings is in the <a href="#config">setup.conf settings</a> section.</p>
+  </section>
+
+  <!-- APACHE -->
+  <section class="doc" id="apache">
+    <span class="label eyebrow">Installation</span>
+    <h2>Apache</h2>
+    <p>You pick the web server in the wizard. nginx is built from source and is faster under load. Apache is installed from packages, understands <code>.htaccess</code> and fits sites that rely on it. Security and maintenance are the same for both, the differences are below.</p>
+
+    <h3>What is done with Apache</h3>
+    <ul>
+      <li>The version is hidden and the TRACE method is off. <code>.env</code>, <code>.git</code> and other hidden files are closed, as well as database dumps, backups and <code>composer.json</code>.</li>
+      <li>Security headers and HSTS are added only where the site has not set its own, so there are no duplicates.</li>
+      <li>Short client timeouts against slow attacks. Apache still waits up to 300 seconds for PHP, so a long import in phpMyAdmin is not cut off.</li>
+      <li>Brotli for text, gzip for older clients.</li>
+      <li>The number of threads is chosen by the server memory.</li>
+      <li>Requests by IP or someone else's name go to the default site: the start page, a redirect to the server name or a refusal. Over https a foreign name gets a refusal with the server's own certificate, so the certificate does not reveal which sites are on the server.</li>
+      <li>CrowdSec reads the shared Apache log with the real visitor addresses, new sites are covered right away.</li>
+      <li>Each of our settings is a separate file and is checked with <code>apache2ctl configtest</code> before it is applied. If the check fails, the previous file stays and Apache keeps running. Package files are not edited, so system updates install without questions.</li>
+    </ul>
+
+    <h3>WAF</h3>
+    <p>ModSecurity with the OWASP CRS rules checks requests to sites and catches SQL injection, XSS, path traversal and similar attacks.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Mode</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Detection</td><td>The default. Blocks nothing, only logs to <code>/var/log/apache2/modsec_audit.log</code> what it would have stopped. Start with it and check whether your sites get false positives</td></tr>
+        <tr><td>Blocking</td><td>Answers an attack with 403, and CrowdSec bans the attacker</td></tr>
+        <tr><td>Off</td><td>The module is off, the packages stay</td></tr>
+      </tbody>
+    </table></div>
+    <p>The WAF does not check the ISPConfig panel, phpMyAdmin and Roundcube: the rules give too many false positives there, and those are behind a password anyway. The mode is changed in the panel: <span class="crumb"><span>Add-ons</span><em>›</em><span>Server maintenance</span><em>›</em><span>Settings</span></span>, then an update with the Security item. From the console: <code>APACHE_WAF</code> in <code>setup.conf</code> and <code>luckyctl update security</code>.</p>
+
+    <h3>Where it comes from</h3>
+    <p>From Debian or Ubuntu (the default): security fixes arrive with system updates. Fresh from Sury: the latest 2.4 release earlier than in the distribution. <code>luckyctl cve</code> and the panel compare the installed Apache with the repository.</p>
+
+    <h3>What Apache does not have</h3>
+    <p>HTTP/3, zstd, GeoIP in the web server itself and the traffic statistics page. There is no rebuild and rollback like nginx has either: Apache is updated with packages together with the system.</p>
   </section>
 
   <!-- LUCKYCTL -->
@@ -887,7 +926,8 @@ luckyctl rollback luckystack        <span class="c"># go back to the previous on
     <h3>Network and firewall</h3>
     <ul>
       <li>ufw closes all ports except the ones the chosen services need. SSH and the panel can be opened only to your own IPs.</li>
-      <li>CrowdSec reads nginx, SSH and mail logs, bans password brute force and scanners and gets a shared list of attackers.</li>
+      <li>CrowdSec reads web server, SSH and mail logs, bans password brute force and scanners and gets a shared list of attackers.</li>
+      <li>On Apache there is an optional ModSecurity WAF with the OWASP CRS rules, see the <a href="#apache">Apache</a> section.</li>
       <li>fail2ban additionally watches SSH, mail, FTP, the ISPConfig panel, Roundcube and MariaDB logins.</li>
       <li>Addresses from the Trusted IPs list are never banned, so you do not lock yourself out by accident.</li>
       <li>To avoid losing the server when editing SSH or the firewall, risky changes roll back on their own if you do not confirm within a few minutes that you still have access.</li>
@@ -908,7 +948,7 @@ luckyctl rollback luckystack        <span class="c"># go back to the previous on
     <h3>Access</h3>
     <ul>
       <li>The panel opens only by the server name. A request by IP gets an empty response, so scanners do not see that ISPConfig is here.</li>
-      <li>On 443, a connection by IP or by someone else's name is dropped before the certificate, so it cannot reveal which sites are on the server. On 80 by IP you can choose: the server start page, a redirect to its name or an empty response.</li>
+      <li>On 443, a connection by IP or by someone else's name is dropped before the certificate, so it cannot reveal which sites are on the server. On Apache, instead of dropping it, the server answers 403 with its own certificate. On 80 by IP you can choose: the server start page, a redirect to its name or an empty response.</li>
       <li>SSH: key-only login (optional), no port or agent forwarding, a custom port.</li>
       <li>Mail and FTP accept a password only over TLS.</li>
     </ul>
@@ -925,7 +965,7 @@ luckyctl rollback luckystack        <span class="c"># go back to the previous on
     <h3>Kernel and services</h3>
     <ul>
       <li>sysctl: protection against route spoofing, SYN flood and kernel address leaks.</li>
-      <li>Short nginx timeouts against slow attacks: 15 seconds for headers, 60 for the body and sending.</li>
+      <li>Short nginx and Apache timeouts against slow attacks: 15 seconds for headers, 60 for the body and sending.</li>
       <li>Optional systemd restrictions for nginx and MariaDB: a read-only system, a separate /tmp, no extra kernel privileges. With them the systemd-analyze security score is 4.9 for nginx and 5.7 for MariaDB, lower is better. If a service does not start with the restrictions, they are removed on their own.</li>
       <li>Encryption: TLS 1.2 and 1.3, X25519MLKEM768 key exchange, resistant to quantum computers, when the browser supports it.</li>
     </ul>
@@ -935,6 +975,7 @@ luckyctl rollback luckystack        <span class="c"># go back to the previous on
       <li>Once a day the server checks nginx against the nginx.org vulnerability list, the OpenSSL in the nginx build against the latest release of its branch, and PHP against the package repository and php.net. If a fix is out, you get a notification with the command to update.</li>
       <li>PHP versions that are no longer supported show up in the check, so you can move sites in time.</li>
       <li>The same check looks at whether the IP has a PTR reverse record and whether the IP or mail domains ended up on blacklists. Without this, mail silently goes to spam or does not arrive.</li>
+      <li>When nginx is built, the nginx, OpenSSL and PCRE2 sources are checked against their authors' signatures, other archives against a checksum, and modules come from a known commit. If anything does not match, the build stops and the running nginx stays as it was.</li>
       <li>LuckyStack releases are signed, installation and self-update only install what passed the signature check.</li>
     </ul>
 
@@ -1002,7 +1043,7 @@ server-backup.sh --restore --all --yes</pre>
       </tbody>
     </table></div>
     <p>You get a message about a new problem once, not on every check. During quiet hours, for example from 23:00 to 08:00, Telegram messages arrive silently, except critical ones: a failed backup, an antivirus find.</p>
-    <p>Messages come in the server language, the one chosen in the wizard. In the notifications panel you can change it separately: the Notification language field, Russian or English. The Telegram bot replies only in Russian for now.</p>
+    <p>Messages come in the server language, the one chosen in the wizard. In the notifications panel you can change it separately: the Notification language field, Russian or English. The Telegram bot replies in the same language.</p>
 
     <h3>Telegram bot</h3>
     <p>If you turn the bot on, you can send it commands. It only answers chats from the list in the settings. Actions that change something have to be confirmed with a button under the message, and each one goes into the panel log.</p>
@@ -1056,6 +1097,8 @@ Reboot: not needed<small>12:51</small></div>
       <thead><tr><th>Key</th><th>Values</th><th>What it sets</th></tr></thead>
       <tbody>
         <tr><td class="m">WEBSERVER</td><td class="n">nginx / apache</td><td>Web server</td></tr>
+        <tr><td class="m">APACHE_SOURCE</td><td class="n">distro / sury</td><td>Apache from the distribution or fresh from Sury</td></tr>
+        <tr><td class="m">APACHE_WAF</td><td class="n">detect / block / off</td><td>ModSecurity WAF: detection, blocking or off</td></tr>
         <tr><td class="m">NGINX_CHANNEL</td><td class="n">stable / mainline</td><td>Which nginx branch to build</td></tr>
         <tr><td class="m">NGINX_AUTO_VERSION</td><td class="n">y / n</td><td>Take the latest version of the branch or the pinned one</td></tr>
         <tr><td class="m">OPENSSL_BRANCH</td><td class="n">3.5 / 4.1 / 4.0</td><td>OpenSSL branch for nginx, 3.5 LTS by default</td></tr>
@@ -1215,11 +1258,9 @@ chmod -R go-w /opt/luckystack</pre>
   <section class="doc" id="roadmap">
     <span class="label eyebrow">Reference</span>
     <h2>What's next</h2>
-    <p>The current version is 0.1.12. Since the first release I've added one-command install with signature verification, signed releases, checking sites before and after an update, the <code>luckyctl cve</code>, <code>blacklist</code>, <code>sites</code> and <code>changes</code> commands, PHP 8.6, Roundcube 1.7, English in the console and notifications, fix buttons in the panel, checks on GitHub, scheduled end-to-end tests on a test server and an English version of this site. Next up:</p>
+    <p>The current version is 0.1.13. Since the first release I've added one-command install with signature verification, signed releases, checking sites before and after an update, the <code>luckyctl cve</code>, <code>blacklist</code>, <code>sites</code> and <code>changes</code> commands, PHP 8.6, Roundcube 1.7, English in the console and notifications, fix buttons in the panel, checks on GitHub, scheduled end-to-end tests on a test server and an English version of this site, full Apache support with a WAF, signature checks of the nginx sources and English replies from the Telegram bot. Next up:</p>
     <ul>
-      <li>Full Apache support: the same security, tuning and add-ons as nginx has.</li>
       <li>A copy of backups on a second server that can't be deleted from the main one.</li>
-      <li>English replies from the Telegram bot.</li>
     </ul>
   </section>
 
