@@ -64,6 +64,7 @@ $set = array(
 	'events'         => isset($cf['NOTIFY_EVENTS']) ? $cf['NOTIFY_EVENTS'] : 'monitor backup malware login',
 	'login_mode'     => isset($cf['NOTIFY_LOGIN_MODE']) ? $cf['NOTIFY_LOGIN_MODE'] : 'new',
 	'quiet'          => isset($cf['NOTIFY_QUIET']) ? $cf['NOTIFY_QUIET'] : '',
+	'lang'           => isset($cf['NOTIFY_LANG']) ? $cf['NOTIFY_LANG'] : '',
 	'disk'           => isset($cf['MON_DISK_PCT']) ? $cf['MON_DISK_PCT'] : '90',
 	'cert'           => isset($cf['MON_CERT_DAYS']) ? $cf['MON_CERT_DAYS'] : '14',
 	'backup'         => isset($cf['MON_BACKUP_DAYS']) ? $cf['MON_BACKUP_DAYS'] : '2',
@@ -91,6 +92,7 @@ if(is_array($job) && !empty($job)) {
 		$nev    = array_values(array_intersect($EVENTS, preg_split('/\s+/', isset($p['events']) ? $p['events'] : '', -1, PREG_SPLIT_NO_EMPTY)));
 		$nlm    = isset($p['login_mode']) ? $p['login_mode'] : 'new';
 		$nq     = isset($p['quiet']) ? trim($p['quiet']) : '';
+		$nlang  = isset($p['lang']) ? (string)$p['lang'] : '';   // пусто — как у сервера (UI_LANG)
 		$disk   = isset($p['disk']) ? trim($p['disk']) : ''; $cert = isset($p['cert']) ? trim($p['cert']) : ''; $bk = isset($p['backup']) ? trim($p['backup']) : '';
 		$err = '';
 		foreach($emails as $e) if(!filter_var($e, FILTER_VALIDATE_EMAIL)) { $err = 'некорректный email: '.$e; break; }
@@ -98,6 +100,7 @@ if(is_array($job) && !empty($job)) {
 		if($err === '' && $ntok !== '' && !preg_match('#^[0-9]+:[A-Za-z0-9_-]+$#', $ntok)) $err = 'некорректный токен бота';
 		if($err === '' && !in_array($nlm, array('new', 'all'), true)) $err = 'некорректный режим входов';
 		if($err === '' && $nq !== '' && !preg_match('/^([01]?[0-9]|2[0-3]):[0-5][0-9]-([01]?[0-9]|2[0-3]):[0-5][0-9]$/', $nq)) $err = 'тихие часы: нужно ЧЧ:ММ — ЧЧ:ММ или пусто';
+		if($err === '' && !in_array($nlang, array('', 'ru', 'en'), true)) $err = 'некорректный язык уведомлений';
 		if($err === '' && (!ctype_digit($disk) || (int)$disk < 50 || (int)$disk > 99)) $err = 'порог диска: число 50–99';
 		if($err === '' && (!ctype_digit($cert) || (int)$cert < 1 || (int)$cert > 60)) $err = 'порог сертификата: число 1–60';
 		if($err === '' && (!ctype_digit($bk) || (int)$bk < 1 || (int)$bk > 30)) $err = 'порог бэкапа: число 1–30';
@@ -119,6 +122,7 @@ if(is_array($job) && !empty($job)) {
 				'NOTIFY_EVENTS'     => implode(' ', $nev),
 				'NOTIFY_LOGIN_MODE' => $nlm,
 				'NOTIFY_QUIET'      => $nq,
+				'NOTIFY_LANG'       => $nlang,
 				'MON_DISK_PCT'      => (int)$disk,
 				'MON_CERT_DAYS'     => (int)$cert,
 				'MON_BACKUP_DAYS'   => (int)$bk,

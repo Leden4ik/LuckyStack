@@ -72,8 +72,14 @@ _i18n_tr() {
 		[[ -z "$p" || "${s:0:${#p}}" == "$p" ]] || continue
 		[[ "$s" =~ ${_I18T_RE[$i]} ]] || continue
 		v="${_I18T_VAL[$i]}"; out=""
-		for cap in "${BASH_REMATCH[@]:1}"; do
+		local -a caps=("${BASH_REMATCH[@]:1}")
+		local r2
+		for cap in "${caps[@]}"; do
 			[[ "$v" == *"%s"* ]] || break
+			# значение тоже может быть фразой с переводом («Бэкап: %s» ← «последний 3 дн. назад»);
+			# пробуем, только если в нём есть не-ASCII, и не глубже двух уровней
+			if [[ "$cap" == *[![:ascii:]]* ]] && (( ${_I18N_D:-0} < 2 )) \
+			   && r2="$(_I18N_D=$(( ${_I18N_D:-0} + 1 )) _i18n_tr "$cap")"; then cap="$r2"; fi
 			out+="${v%%"%s"*}${cap}"; v="${v#*"%s"}"
 		done
 		printf '%s' "${out}${v}"

@@ -163,6 +163,22 @@ shift $((OPTIND - 1))
 SUBJ="${1:-Уведомление сервера}"; BODY="${2:-$SUBJ}"
 HOST="$(hostname -f 2>/dev/null || hostname)"
 
+# Язык уведомлений: NOTIFY_LANG (ru/en), иначе язык сервера из setup.conf. Переводим тем же
+# механизмом, что и консоль (lib/i18n.sh установленного выпуска): тему и каждую строку текста.
+NL="${NOTIFY_LANG:-}"
+[[ -n "$NL" ]] || NL="$(grep -m1 -oP '^UI_LANG=["'"'"']?\K[a-z]+' /etc/luckystack/setup.conf 2>/dev/null)"
+if [[ "${NL:-ru}" != ru && -r /opt/luckystack/current/lib/i18n.sh ]]; then
+	SCRIPT_DIR=/opt/luckystack/current; LANG_DIR=/opt/luckystack/current/lang
+	# shellcheck disable=SC1091
+	. /opt/luckystack/current/lib/i18n.sh 2>/dev/null && i18n_load "$NL" 2>/dev/null
+	if declare -F t >/dev/null; then
+		SUBJ="$(t "$SUBJ")"
+		out=""
+		while IFS= read -r line || [[ -n "$line" ]]; do out+="$(t "$line")"$'\n'; done <<<"$BODY"
+		BODY="${out%$'\n'}"
+	fi
+fi
+
 if [[ -n "$EVENT" ]]; then
 	case " ${NOTIFY_EVENTS:-monitor backup malware login} " in *" $EVENT "*) ;; *) exit 0 ;; esac
 fi

@@ -188,6 +188,12 @@ Read-only и безопасные команды (можно гонять в л�
 Панель запускает `--healthcheck` всегда с `--lang ru` (разбирает вывод по русским названиям), сквозные
 тесты тоже вызывают `luckyctl --lang ru`.
 
+**Уведомления.** `server-notify.sh` переводит тему и каждую строку текста тем же `lang/en.lng`, если
+`NOTIFY_LANG=en` в `/etc/server-notify.conf` (выбор в панели Дополнения → Уведомления → Язык
+уведомлений), а при пустом `NOTIFY_LANG` берёт `UI_LANG` из `setup.conf`. Подставленное значение с
+русскими буквами переводится тоже («Бэкап: %s» ← «последний 3 дн. назад», не глубже двух уровней).
+Ответы Telegram-бота пока только по-русски.
+
 **Новые строки.** `python3 tools/i18n-extract.py . /tmp/i18n 1` кладёт в `/tmp/i18n/all.json`
 непереведённые ключи; перевод дописывается в `lang/en.lng` (значения экранируются для bash: обратный
 слеш, кавычка, `$`, обратная кавычка). Синтаксис `lang/*.lng` проверяет `tests/repo-checks.sh`.
@@ -949,7 +955,7 @@ mariadb/postfix/dovecot (systemd-override + `limits.conf`), журналируе
   запятую), `NOTIFY_TG_TOKEN`, `NOTIFY_TG_CHATS` (несколько через пробел, старый `NOTIFY_TG_CHAT` тоже читается),
   `NOTIFY_EVENTS` (monitor backup malware login digest), `NOTIFY_LOGIN_MODE` (new|all), `NOTIFY_QUIET`
   (`23:00-08:00`: в Telegram без звука, кроме `-l crit`), `MON_*` пороги, `NOTIFY_TG_BOT` (y|n), `NOTIFY_TG_API`
-  (адрес Telegram API, для тестов). `apply_notifications` (финал установки и `--update`) ставит helper, монитор,
+  (адрес Telegram API, для тестов), `NOTIFY_LANG` (ru|en, пусто = как у сервера). `apply_notifications` (финал установки и `--update`) ставит helper, монитор,
   таймер, службу входов и бота ВСЕГДА, а конфиг дописывает: что настроено в панели, не затирается. Токен без chat
   id даёт предупреждение. `server-notify.sh [-e событие] [-l info|warn|crit] тема тело`: выключенное событие не
   шлётся. `server-monitor.sh` (08:00): диск, сертификат хоста, все включённые службы (включая все PHP-FPM, CrowdSec,

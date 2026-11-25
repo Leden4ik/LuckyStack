@@ -52,6 +52,19 @@ grep -q 'e2e проверка' "$LOG" && ok "текст уведомления �
 "$N" -e digest -l info "e2e" "выключенное событие" >/dev/null 2>&1
 [[ "$(grep -c sendMessage "$LOG")" == 0 ]] && ok "выключенное событие не отправляется" || bad "выключенное событие всё равно ушло"
 
+# Язык уведомлений: при NOTIFY_LANG=en тема и строки текста переводятся (тем же переводом, что консоль)
+if [[ -r /opt/luckystack/current/lang/en.lng ]]; then
+	: >"$LOG"
+	if grep -q '^NOTIFY_LANG=' "$C"; then sed -i "s|^NOTIFY_LANG=.*|NOTIFY_LANG='en'|" "$C"; else echo "NOTIFY_LANG='en'" >>"$C"; fi
+	"$N" -e monitor -l warn "Сводка за сутки" "Бэкап: последний 1 дн. назад" >/dev/null 2>&1
+	grep -q 'Daily summary' "$LOG" && grep -q 'Backup: last one 1 days ago' "$LOG" \
+		&& ok "уведомление на английском (NOTIFY_LANG=en)" || bad "уведомление не перевелось на английский"
+	sed -i "s|^NOTIFY_LANG=.*|NOTIFY_LANG=''|" "$C"
+	: >"$LOG"
+	"$N" -e monitor -l warn "Сводка за сутки" "Бэкап: последний 1 дн. назад" >/dev/null 2>&1
+	grep -q 'Сводка за сутки' "$LOG" && ok "без NOTIFY_LANG уведомление на языке сервера (русском)" || bad "уведомление без NOTIFY_LANG не на русском"
+fi
+
 # Монитор видит упавшую службу (берём ту, что точно есть и не держит сайт)
 svc=""
 for s in rspamd redis-server clamav-daemon; do systemctl is-active --quiet "$s" 2>/dev/null && { svc="$s"; break; }; done

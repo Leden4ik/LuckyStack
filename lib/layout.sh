@@ -18,7 +18,7 @@
 LS_KEEP_RELEASES=3
 
 # Что из каталога с кодом входит в выпуск. Настройки, состояние и журнал сюда не попадают.
-LS_CODE_ITEMS=(server-setup.sh luckyctl lib assets lang DOCUMENTATION.md GETTING-STARTED.md README.md CHANGELOG.md LICENSE)
+LS_CODE_ITEMS=(server-setup.sh luckyctl lib assets lang DOCUMENTATION.md GETTING-STARTED.md README.md README.en.md CHANGELOG.md LICENSE)
 
 _ls_real() { readlink -f -- "$1" 2>/dev/null; }
 

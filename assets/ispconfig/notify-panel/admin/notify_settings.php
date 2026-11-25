@@ -46,13 +46,14 @@ if($do === 'save' && !$busy) {
 		'cert'       => ss_post('cert'),
 		'backup'     => ss_post('backup'),
 		'bot'        => (ss_post('bot') === 'y') ? 'y' : 'n',
+		'lang'       => in_array(ss_post('lang'), array('ru', 'en'), true) ? ss_post('lang') : '',
 	);
 	// что именно уйдёт в очередь (без токена — он write-only)
 	$what = _nL('email_txt').'='.($pl['email'] !== '' ? $pl['email'] : '—')
 		.'; chat='.($pl['tg_chats'] !== '' ? $pl['tg_chats'] : '—')
 		.($pl['tg_token'] !== '' ? '; '._nL('token_txt').'=•••' : '')
 		.'; events='.$pl['events'].'; login='.$pl['login_mode'].'; quiet='.($pl['quiet'] !== '' ? $pl['quiet'] : '—')
-		.'; disk='.$pl['disk'].'; cert='.$pl['cert'].'; backup='.$pl['backup'].'; bot='.$pl['bot'];
+		.'; disk='.$pl['disk'].'; cert='.$pl['cert'].'; backup='.$pl['backup'].'; bot='.$pl['bot'].'; lang='.($pl['lang'] !== '' ? $pl['lang'] : '—');
 	$app->db->query("INSERT INTO notify_job (action, payload, status, created) VALUES ('save', ?, 'pending', NOW())", json_encode($pl));
 	ss_audit('notify', 'save', $what);
 	$busy = true;
@@ -128,6 +129,10 @@ foreach($EVENTS as $e) {
 echo $row(_nL('events_txt'), $ev);
 echo $row(_nL('quiet_txt'), '<input type="text" id="nt_qfrom" class="form-control" style="display:inline-block;width:90px" value="'.$h($qf).'" placeholder="23:00"> — '
 	.'<input type="text" id="nt_qto" class="form-control" style="display:inline-block;width:90px" value="'.$h($qt).'" placeholder="08:00">', _nL('quiet_hint_txt'));
+$nlang = $g('lang', '');
+$lopt = '';
+foreach(array('' => _nL('lang_server_txt'), 'ru' => 'Русский', 'en' => 'English') as $lk => $lt) $lopt .= '<option value="'.$h($lk).'"'.($nlang === $lk ? ' selected' : '').'>'.$h($lt).'</option>';
+echo $row(_nL('lang_txt'), '<select id="nt_lang" class="form-control" style="display:inline-block;width:220px">'.$lopt.'</select>', _nL('lang_hint_txt'));
 echo $row(_nL('thresholds_txt'),
 	$h(_nL('disk_txt')).' <input type="text" id="nt_disk" class="form-control" style="display:inline-block;width:70px" value="'.$h($g('disk','90')).'"> &nbsp; '
 	.$h(_nL('cert_txt')).' <input type="text" id="nt_cert" class="form-control" style="display:inline-block;width:70px" value="'.$h($g('cert','14')).'"> &nbsp; '
@@ -163,7 +168,7 @@ jQuery(function($){
 	function lock(){ busy=true; $('#nt_save,.ss-nt-act').css({opacity:.5,'pointer-events':'none'}); }
 	$('#nt_save').off('click.nt').on('click.nt',function(e){e.preventDefault(); if(busy)return; lock();
 		var p = {do: 'save', email: $('#nt_email').val(), chats: $('#nt_chats').val(), token: $('#nt_token').val(),
-			login_mode: $('#nt_login_mode').val(), q_from: $.trim($('#nt_qfrom').val()), q_to: $.trim($('#nt_qto').val()),
+			login_mode: $('#nt_login_mode').val(), q_from: $.trim($('#nt_qfrom').val()), q_to: $.trim($('#nt_qto').val()), lang: $('#nt_lang').val(),
 			disk: $('#nt_disk').val(), cert: $('#nt_cert').val(), backup: $('#nt_backup').val(),
 			bot: ($('#nt_bot').is(':checked') ? 'y' : 'n')};
 		$.each(['monitor','backup','malware','login','digest'], function(i, e){ p['ev_'+e] = $('#nt_ev_'+e).is(':checked') ? 'y' : 'n'; });
