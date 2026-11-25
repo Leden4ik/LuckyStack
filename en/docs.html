@@ -455,6 +455,7 @@ dig +short server.example.com
     <span class="label eyebrow">Installation</span>
     <h2>Setup wizard</h2>
     <p>The wizard asks its questions in order, writes the answers to a settings file and only then starts installing. Nothing on the server changes until the final confirmation.</p>
+    <p>The very first question is the language: Russian or English. The choice is saved in <code>setup.conf</code> (the <code>UI_LANG</code> key), and from then on every <code>luckyctl</code> command speaks it. The ISPConfig panels follow the language of the ISPConfig user, which is set in the panel itself.</p>
 
     <h3>What a question looks like</h3>
     <p>Each question is a box with options. The default option is in square brackets, Enter picks it.</p>
@@ -575,6 +576,7 @@ luckyctl install --from security   <span class="c"># start from a stage and go t
     <h2>The luckyctl command</h2>
     <p>Everything you do with the server from the console is done with one command. You can call it from any directory, and help for any subcommand opens with <code>luckyctl help &lt;command&gt;</code>.</p>
     <p>Without a command, <code>luckyctl</code> opens the main menu with the same actions.</p>
+    <p>Any command can be run once in the other language, the <code>--lang</code> key goes anywhere: <code>luckyctl check --lang en</code>.</p>
 
     <div class="tbl"><table>
       <thead><tr><th>Command</th><th>What it does</th></tr></thead>
@@ -595,7 +597,8 @@ luckyctl install --from security   <span class="c"># start from a stage and go t
         <tr><td class="m">backup</td><td>Make a backup now, <code>backup list</code> shows the snapshots</td></tr>
         <tr><td class="m">restore</td><td>Restore from a snapshot: databases, configs, sites, mail</td></tr>
         <tr><td class="m">add-php 8.6</td><td>Add a PHP version, it shows up in the sites' list right away</td></tr>
-        <tr><td class="m">remove-php</td><td>Remove a PHP version. It won't let you remove one that has sites on it</td></tr>
+        <tr><td class="m">remove-php 8.3</td><td>Remove a PHP version. It won't let you remove one that has sites on it, including sites on the default PHP</td></tr>
+        <tr><td class="m">fix-world-writable</td><td>Remove write access for everyone from files in /etc, /usr/local and /var/www. The old permissions are saved, to bring them back: <code>fix-world-writable --revert FILE</code></td></tr>
         <tr><td class="m">timezone Europe/Moscow</td><td>Change the time zone everywhere: system, PHP, MariaDB, ISPConfig, cron</td></tr>
         <tr><td class="m">adopt</td><td>Add backup, notifications and protection to a server that was set up by hand</td></tr>
         <tr><td class="m">diagnostics</td><td>Collect an archive for troubleshooting, without passwords and keys</td></tr>
@@ -740,6 +743,7 @@ luckyctl changes /etc/nginx/nginx.conf   <span class="c"># history of one file</
     <h3 id="panel-maint">Server maintenance</h3>
     <p>The main page of the group. Five tabs: Status, Update, File changes, Settings and Action log.</p>
     <p>Besides versions and checks, the Status tab has a Security fixes and mail reputation block. It shows the same thing as <code>luckyctl cve</code> and <code>luckyctl blacklist</code>, with explanations and a link to the Spamhaus request form. The block is refreshed together with the server check. The panel does not send separate alerts about it, so it does not duplicate the daily monitor.</p>
+    <p>The Security block has fix buttons next to the warnings. "Remove write-for-all" takes write access for everyone off the files found in /etc, /usr/local and /var/www, the old permissions are saved in <code>/root/luckystack-backups</code> and can be restored from the console. "Jail: name" is shown for every shell user without a jail and moves that user into a jail through ISPConfig after a confirmation. Before you press it, look at what files and users these are: if a user's script needs the whole system, it will stop working in a jail.</p>
     <p>The File changes tab shows the last 20 installer steps: which config files each of them added, changed or removed. The full log and the history of a single file are in the console: <code>luckyctl changes</code>.</p>
     <figure class="shot-fig">
       <img class="shot" data-name="maint-overview" src="../img/maint-overview-dark.webp" width="1600" height="1709" loading="lazy" alt="Server maintenance: versions of LuckyStack, nginx, OpenSSL, PHP, MariaDB, ISPConfig and security checks">
@@ -913,8 +917,8 @@ luckyctl rollback luckystack        <span class="c"># go back to the previous on
     <ul>
       <li>The PHP version is not shown in headers, session cookies are not accessible from JavaScript.</li>
       <li>Each site has its own OPcache, one site cannot read another site's code from the cache.</li>
-      <li>ISPConfig shell users are locked in a jail, and a check in the panel reminds you if they are not.</li>
-      <li>World-writable site files are found during the check and fixed with a button.</li>
+      <li>ISPConfig shell users are locked in a jail, and a check in the panel reminds you if they are not and moves them into a jail with a button.</li>
+      <li>World-writable site files are found during the check and fixed with a button, the old permissions can be brought back.</li>
       <li>Once a day sites are scanned for malicious code, and if something is found you get an email.</li>
     </ul>
 
@@ -998,6 +1002,7 @@ server-backup.sh --restore --all --yes</pre>
       </tbody>
     </table></div>
     <p>You get a message about a new problem once, not on every check. During quiet hours, for example from 23:00 to 08:00, Telegram messages arrive silently, except critical ones: a failed backup, an antivirus find.</p>
+    <p>Messages come in the server language, the one chosen in the wizard. In the notifications panel you can change it separately: the Notification language field, Russian or English. The Telegram bot replies only in Russian for now.</p>
 
     <h3>Telegram bot</h3>
     <p>If you turn the bot on, you can send it commands. It only answers chats from the list in the settings. Actions that change something have to be confirmed with a button under the message, and each one goes into the panel log.</p>
@@ -1040,6 +1045,7 @@ Reboot: not needed<small>12:51</small></div>
       <tbody>
         <tr><td class="m">SERVER_FQDN</td><td class="n">name</td><td>Full server name</td></tr>
         <tr><td class="m">TIMEZONE</td><td class="n">Europe/Moscow</td><td>Time zone for everything</td></tr>
+        <tr><td class="m">UI_LANG</td><td class="n">ru / en</td><td>Language of the console and notifications</td></tr>
         <tr><td class="m">SERVER_HAS_IPV6</td><td class="n">y / n</td><td>Detected automatically, you only need to set it to turn IPv6 off</td></tr>
         <tr><td class="m">TUNE_SWAP</td><td class="n">y / n</td><td>Create a swap file on a server with little memory</td></tr>
       </tbody>
@@ -1209,11 +1215,11 @@ chmod -R go-w /opt/luckystack</pre>
   <section class="doc" id="roadmap">
     <span class="label eyebrow">Reference</span>
     <h2>What's next</h2>
-    <p>The current version is 0.1.11. Since the first release I've added one-command install with signature verification, signed releases, checking sites before and after an update, the <code>luckyctl cve</code>, <code>blacklist</code>, <code>sites</code> and <code>changes</code> commands, PHP 8.6, Roundcube 1.7, checks on GitHub, end-to-end tests on a test server and an English version of this site. Next up:</p>
+    <p>The current version is 0.1.12. Since the first release I've added one-command install with signature verification, signed releases, checking sites before and after an update, the <code>luckyctl cve</code>, <code>blacklist</code>, <code>sites</code> and <code>changes</code> commands, PHP 8.6, Roundcube 1.7, English in the console and notifications, fix buttons in the panel, checks on GitHub, scheduled end-to-end tests on a test server and an English version of this site. Next up:</p>
     <ul>
       <li>Full Apache support: the same security, tuning and add-ons as nginx has.</li>
       <li>A copy of backups on a second server that can't be deleted from the main one.</li>
-      <li>English in the console. Right now only part of the wizard is translated, the panels are already in two languages.</li>
+      <li>English replies from the Telegram bot.</li>
     </ul>
   </section>
 
